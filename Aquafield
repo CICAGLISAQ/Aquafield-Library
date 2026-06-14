@@ -1,2133 +1,1254 @@
 --[[
-  ShadowField Interface Suite
-  A Roblox Exploit UI Library
-  System similar to Rayfield UI Library by Sirius
-  For authorized penetration testing purposes only
---]]
+    Aquafield Interface Suite
+    A Roblox UI library with a Rayfield-compatible API.
+    Themes: Crimson, MatrixGreen, Ocean (+ Default alias -> Ocean)
+    Author: AquaMoon
 
-local ShadowField = {}
-ShadowField.__index = ShadowField
+    Usage (Rayfield-style, drop-in):
 
--- Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
+        debugX = true
+        local Aquafield = loadstring(game:HttpGet('https://YOUR_RAW_URL/Aquafield.lua'))()
+
+        local Window = Aquafield:CreateWindow({
+            Name = "Aquafield Example",
+            Icon = 0,
+            LoadingTitle = "Aquafield Interface Suite",
+            LoadingSubtitle = "by you",
+            Theme = "Ocean", -- "Crimson" | "MatrixGreen" | "Ocean" | "Default"
+            DisableAquafieldPrompts = false,
+            DisableBuildWarnings = false,
+            ConfigurationSaving = {
+                Enabled = true,
+                FolderName = nil,
+                FileName = "Big Hub",
+            },
+            Discord = { Enabled = false, Invite = "noinvitelink", RememberJoins = true },
+            KeySystem = false,
+            KeySettings = {
+                Title = "Untitled", Subtitle = "Key System",
+                Note = "No method of obtaining the key is provided",
+                FileName = "Key", SaveKey = true, GrabKeyFromSite = false,
+                Key = {"Hello"},
+            },
+        })
+
+        local Tab = Window:CreateTab("Tab Example", 4483362458)
+        local Section = Tab:CreateSection("Section Example")
+        local Button = Tab:CreateButton({ Name = "Button Example", Callback = function() end })
+        Aquafield:LoadConfiguration()
+]]
+
+local CoreGui          = game:GetService("CoreGui")
+local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-local CoreGui = game:GetService("CoreGui")
-local TextService = game:GetService("TextService")
-local HttpService = game:GetService("HttpService")
+local RunService       = game:GetService("RunService")
+local HttpService      = game:GetService("HttpService")
+local Players          = game:GetService("Players")
 
--- Exploit compatibility
-local isStudio = RunService:IsStudio()
-local HUI = (syn and syn.protect_gui and syn) or (gethui and gethui()) or CoreGui
-local protect = (syn and syn.protect_gui) or (protect_gui) or function() end
-local write = (writefile) or function() end
-local read = (readfile) or function() end
-local isFolder = (isfolder) or function() return false end
-local makeFolder = (makefolder) or function() end
-local isFile = (isfile) or function() return false end
-local requestFn = (syn and syn.request) or (http and http.request) or (request) or function() end
+local LP = Players.LocalPlayer
 
--- Internal State
-local Instances = {}
-local Configuration = {}
-local Themes = {}
-local ActiveWindows = {}
-local NotificationQueue = {}
-local IsNotificationActive = false
-local UIConnections = {}
-local TweenInfoDefault = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-
--- ============================
--- THEME SYSTEM
--- ============================
-
-Themes["Default"] = {
-    Window = {
-        BackgroundColor = Color3.fromRGB(20, 20, 25),
-        TopbarColor = Color3.fromRGB(25, 25, 32),
-        AccentColor = Color3.fromRGB(0, 140, 255),
-        TextColor = Color3.fromRGB(255, 255, 255),
-        SubTextColor = Color3.fromRGB(150, 150, 160),
-        BorderColor = Color3.fromRGB(35, 35, 45),
-        TitleColor = Color3.fromRGB(255, 255, 255),
+----------------------------------------------------------------
+-- THEMES
+----------------------------------------------------------------
+local Themes = {
+    Ocean = {
+        Background   = Color3.fromRGB(10, 18, 30),
+        Sidebar      = Color3.fromRGB(14, 24, 40),
+        Topbar       = Color3.fromRGB(12, 22, 36),
+        Element      = Color3.fromRGB(20, 34, 54),
+        ElementHover = Color3.fromRGB(28, 46, 72),
+        Accent       = Color3.fromRGB(64, 180, 255),
+        AccentSoft   = Color3.fromRGB(28, 110, 180),
+        Text         = Color3.fromRGB(225, 240, 255),
+        SubText      = Color3.fromRGB(140, 170, 200),
+        Border       = Color3.fromRGB(34, 60, 90),
+        Success      = Color3.fromRGB(80, 220, 200),
+        Error        = Color3.fromRGB(255, 90, 110),
     },
-    Tab = {
-        BackgroundColor = Color3.fromRGB(25, 25, 32),
-        SelectedColor = Color3.fromRGB(30, 30, 40),
-        TextColor = Color3.fromRGB(150, 150, 160),
-        SelectedTextColor = Color3.fromRGB(255, 255, 255),
-        HoverColor = Color3.fromRGB(35, 35, 45),
+    Crimson = {
+        Background   = Color3.fromRGB(18, 8, 10),
+        Sidebar      = Color3.fromRGB(24, 10, 14),
+        Topbar       = Color3.fromRGB(20, 9, 12),
+        Element      = Color3.fromRGB(38, 14, 20),
+        ElementHover = Color3.fromRGB(58, 20, 28),
+        Accent       = Color3.fromRGB(235, 60, 80),
+        AccentSoft   = Color3.fromRGB(150, 30, 45),
+        Text         = Color3.fromRGB(255, 235, 235),
+        SubText      = Color3.fromRGB(190, 150, 155),
+        Border       = Color3.fromRGB(80, 25, 35),
+        Success      = Color3.fromRGB(120, 220, 140),
+        Error        = Color3.fromRGB(255, 80, 80),
     },
-    Element = {
-        BackgroundColor = Color3.fromRGB(25, 25, 32),
-        HoverColor = Color3.fromRGB(30, 30, 38),
-        ToggleOn = Color3.fromRGB(0, 140, 255),
-        ToggleOff = Color3.fromRGB(40, 40, 50),
-        SliderBackground = Color3.fromRGB(40, 40, 50),
-        SliderFill = Color3.fromRGB(0, 140, 255),
-        InputBackground = Color3.fromRGB(20, 20, 28),
-        TextColor = Color3.fromRGB(255, 255, 255),
-        SubTextColor = Color3.fromRGB(140, 140, 150),
-        BorderColor = Color3.fromRGB(40, 40, 50),
-        DangerColor = Color3.fromRGB(220, 50, 50),
-        SuccessColor = Color3.fromRGB(50, 200, 100),
-    },
-    Notification = {
-        BackgroundColor = Color3.fromRGB(25, 25, 32),
-        BorderColor = Color3.fromRGB(0, 140, 255),
-        TextColor = Color3.fromRGB(255, 255, 255),
-        SubTextColor = Color3.fromRGB(150, 150, 160),
-    },
-    Dropdown = {
-        BackgroundColor = Color3.fromRGB(25, 25, 32),
-        ItemColor = Color3.fromRGB(30, 30, 38),
-        SelectedColor = Color3.fromRGB(0, 140, 255),
-        HoverColor = Color3.fromRGB(35, 35, 45),
-        TextColor = Color3.fromRGB(255, 255, 255),
-    },
-    Keybind = {
-        BackgroundColor = Color3.fromRGB(25, 25, 32),
-        KeyColor = Color3.fromRGB(35, 35, 45),
-        TextColor = Color3.fromRGB(255, 255, 255),
+    MatrixGreen = {
+        Background   = Color3.fromRGB(4, 12, 6),
+        Sidebar      = Color3.fromRGB(6, 18, 10),
+        Topbar       = Color3.fromRGB(5, 15, 8),
+        Element      = Color3.fromRGB(10, 28, 14),
+        ElementHover = Color3.fromRGB(16, 44, 22),
+        Accent       = Color3.fromRGB(80, 255, 130),
+        AccentSoft   = Color3.fromRGB(30, 160, 70),
+        Text         = Color3.fromRGB(210, 255, 220),
+        SubText      = Color3.fromRGB(120, 180, 140),
+        Border       = Color3.fromRGB(28, 80, 40),
+        Success      = Color3.fromRGB(120, 255, 160),
+        Error        = Color3.fromRGB(255, 100, 100),
     },
 }
+Themes.Default = Themes.Ocean -- alias so Theme="Default" works
 
-Themes["Dark"] = {
-    Window = {
-        BackgroundColor = Color3.fromRGB(12, 12, 16),
-        TopbarColor = Color3.fromRGB(16, 16, 22),
-        AccentColor = Color3.fromRGB(120, 80, 255),
-        TextColor = Color3.fromRGB(220, 220, 230),
-        SubTextColor = Color3.fromRGB(120, 120, 130),
-        BorderColor = Color3.fromRGB(28, 28, 36),
-        TitleColor = Color3.fromRGB(255, 255, 255),
-    },
-    Tab = {
-        BackgroundColor = Color3.fromRGB(16, 16, 22),
-        SelectedColor = Color3.fromRGB(22, 22, 30),
-        TextColor = Color3.fromRGB(120, 120, 130),
-        SelectedTextColor = Color3.fromRGB(220, 220, 230),
-        HoverColor = Color3.fromRGB(28, 28, 36),
-    },
-    Element = {
-        BackgroundColor = Color3.fromRGB(16, 16, 22),
-        HoverColor = Color3.fromRGB(22, 22, 30),
-        ToggleOn = Color3.fromRGB(120, 80, 255),
-        ToggleOff = Color3.fromRGB(32, 32, 42),
-        SliderBackground = Color3.fromRGB(32, 32, 42),
-        SliderFill = Color3.fromRGB(120, 80, 255),
-        InputBackground = Color3.fromRGB(12, 12, 20),
-        TextColor = Color3.fromRGB(220, 220, 230),
-        SubTextColor = Color3.fromRGB(110, 110, 120),
-        BorderColor = Color3.fromRGB(32, 32, 42),
-        DangerColor = Color3.fromRGB(220, 50, 50),
-        SuccessColor = Color3.fromRGB(50, 200, 100),
-    },
-    Notification = {
-        BackgroundColor = Color3.fromRGB(16, 16, 22),
-        BorderColor = Color3.fromRGB(120, 80, 255),
-        TextColor = Color3.fromRGB(220, 220, 230),
-        SubTextColor = Color3.fromRGB(110, 110, 120),
-    },
-    Dropdown = {
-        BackgroundColor = Color3.fromRGB(16, 16, 22),
-        ItemColor = Color3.fromRGB(22, 22, 30),
-        SelectedColor = Color3.fromRGB(120, 80, 255),
-        HoverColor = Color3.fromRGB(28, 28, 36),
-        TextColor = Color3.fromRGB(220, 220, 230),
-    },
-    Keybind = {
-        BackgroundColor = Color3.fromRGB(16, 16, 22),
-        KeyColor = Color3.fromRGB(28, 28, 36),
-        TextColor = Color3.fromRGB(220, 220, 230),
-    },
+----------------------------------------------------------------
+-- LIBRARY ROOT
+----------------------------------------------------------------
+local Aquafield = {
+    Flags     = {},
+    Theme     = Themes.Ocean,
+    ThemeName = "Ocean",
+    _windows  = {},
+    _themed   = {},
 }
 
-Themes["Light"] = {
-    Window = {
-        BackgroundColor = Color3.fromRGB(245, 245, 250),
-        TopbarColor = Color3.fromRGB(255, 255, 255),
-        AccentColor = Color3.fromRGB(0, 120, 230),
-        TextColor = Color3.fromRGB(20, 20, 30),
-        SubTextColor = Color3.fromRGB(100, 100, 110),
-        BorderColor = Color3.fromRGB(220, 220, 230),
-        TitleColor = Color3.fromRGB(20, 20, 30),
-    },
-    Tab = {
-        BackgroundColor = Color3.fromRGB(255, 255, 255),
-        SelectedColor = Color3.fromRGB(240, 240, 248),
-        TextColor = Color3.fromRGB(100, 100, 110),
-        SelectedTextColor = Color3.fromRGB(20, 20, 30),
-        HoverColor = Color3.fromRGB(235, 235, 243),
-    },
-    Element = {
-        BackgroundColor = Color3.fromRGB(255, 255, 255),
-        HoverColor = Color3.fromRGB(248, 248, 252),
-        ToggleOn = Color3.fromRGB(0, 120, 230),
-        ToggleOff = Color3.fromRGB(200, 200, 210),
-        SliderBackground = Color3.fromRGB(210, 210, 220),
-        SliderFill = Color3.fromRGB(0, 120, 230),
-        InputBackground = Color3.fromRGB(240, 240, 248),
-        TextColor = Color3.fromRGB(20, 20, 30),
-        SubTextColor = Color3.fromRGB(100, 100, 110),
-        BorderColor = Color3.fromRGB(220, 220, 230),
-        DangerColor = Color3.fromRGB(200, 40, 40),
-        SuccessColor = Color3.fromRGB(40, 180, 80),
-    },
-    Notification = {
-        BackgroundColor = Color3.fromRGB(255, 255, 255),
-        BorderColor = Color3.fromRGB(0, 120, 230),
-        TextColor = Color3.fromRGB(20, 20, 30),
-        SubTextColor = Color3.fromRGB(100, 100, 110),
-    },
-    Dropdown = {
-        BackgroundColor = Color3.fromRGB(255, 255, 255),
-        ItemColor = Color3.fromRGB(248, 248, 252),
-        SelectedColor = Color3.fromRGB(0, 120, 230),
-        HoverColor = Color3.fromRGB(235, 235, 243),
-        TextColor = Color3.fromRGB(20, 20, 30),
-    },
-    Keybind = {
-        BackgroundColor = Color3.fromRGB(255, 255, 255),
-        KeyColor = Color3.fromRGB(235, 235, 243),
-        TextColor = Color3.fromRGB(20, 20, 30),
-    },
-}
-
--- ============================
--- INTERNAL FUNCTIONS
--- ============================
-
-function ShadowField:DeepCopy(tbl)
-    local copy = {}
-    for k, v in pairs(tbl) do
-        if type(v) == "table" then
-            copy[k] = self:DeepCopy(v)
-        else
-            copy[k] = v
-        end
-    end
-    return copy
+local function new(class, props, children)
+    local inst = Instance.new(class)
+    for k, v in pairs(props or {}) do inst[k] = v end
+    for _, c in ipairs(children or {}) do c.Parent = inst end
+    return inst
 end
 
-function ShadowField:Create(class, properties)
-    local instance = Instance.new(class)
-    for prop, value in pairs(properties) do
-        if prop == "Parent" then
-            instance.Parent = value
-        elseif prop ~= "Children" then
-            pcall(function()
-                instance[prop] = value
-            end)
-        end
-    end
-    if properties.Children then
-        for _, childProps in ipairs(properties.Children) do
-            local child = self:Create(childProps[1], childProps[2])
-            child.Parent = instance
-        end
-    end
-    return instance
+local function tween(o, t, props, style, dir)
+    local info = TweenInfo.new(t or 0.2, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out)
+    local tw = TweenService:Create(o, info, props)
+    tw:Play()
+    return tw
 end
 
-function ShadowField:MakeDraggable(frame, dragArea)
-    dragArea = dragArea or frame
-    local dragging, dragInput, dragStart, startPos
-    
-    dragArea.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = frame.Position
-            
-            input.Changed:Connect(function()
-                if input.UserInputState == Enum.UserInputState.End then
-                    dragging = false
-                end
-            end)
-        end
-    end)
-    
-    dragArea.InputChanged:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-            dragInput = input
-        end
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if input == dragInput and dragging then
-            local delta = input.Position - dragStart
-            frame.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
+local function corner(p, r) return new("UICorner", { CornerRadius = UDim.new(0, r or 6), Parent = p }) end
+local function stroke(p, c, t, tr)
+    return new("UIStroke", {
+        Color = c or Color3.fromRGB(255,255,255), Thickness = t or 1,
+        Transparency = tr or 0, ApplyStrokeMode = Enum.ApplyStrokeMode.Border, Parent = p,
+    })
+end
+local function pad(p, x)
+    x = x or 8
+    return new("UIPadding", {
+        PaddingTop = UDim.new(0, x), PaddingBottom = UDim.new(0, x),
+        PaddingLeft = UDim.new(0, x), PaddingRight = UDim.new(0, x), Parent = p,
+    })
 end
 
-function ShadowField:TweenObject(object, properties, tweenInfo)
-    tweenInfo = tweenInfo or TweenInfoDefault
-    local tween = TweenService:Create(object, tweenInfo, properties)
-    tween:Play()
-    return tween
+local function themed(inst, key, role)
+    Aquafield._themed[#Aquafield._themed + 1] = { inst = inst, key = key, role = role }
 end
 
-function ShadowField:GetTextSize(text, font, size, maxWidth)
-    return TextService:GetTextSize(text, size, font, Vector2.new(maxWidth, 1000))
-end
-
-function ShadowField:RoundNumber(num, decimals)
-    local mult = 10^(decimals or 0)
-    return math.floor(num * mult + 0.5) / mult
-end
-
-function ShadowField:GetKeyName(input)
-    local keyCodes = {
-        [Enum.KeyCode.LeftShift] = "LShift",
-        [Enum.KeyCode.RightShift] = "RShift",
-        [Enum.KeyCode.LeftControl] = "LCtrl",
-        [Enum.KeyCode.RightControl] = "RCtrl",
-        [Enum.KeyCode.LeftAlt] = "LAlt",
-        [Enum.KeyCode.RightAlt] = "RAlt",
-        [Enum.KeyCode.CapsLock] = "Caps",
-        [Enum.KeyCode.Tab] = "Tab",
-        [Enum.KeyCode.Escape] = "Esc",
-        [Enum.KeyCode.Space] = "Space",
-        [Enum.KeyCode.Return] = "Enter",
-        [Enum.KeyCode.Backspace] = "Bksp",
-        [Enum.KeyCode.Delete] = "Del",
-        [Enum.KeyCode.Insert] = "Ins",
-        [Enum.KeyCode.Home] = "Home",
-        [Enum.KeyCode.End] = "End",
-        [Enum.KeyCode.PageUp] = "PgUp",
-        [Enum.KeyCode.PageDown] = "PgDn",
-        [Enum.KeyCode.Up] = "↑",
-        [Enum.KeyCode.Down] = "↓",
-        [Enum.KeyCode.Left] = "←",
-        [Enum.KeyCode.Right] = "→",
-        [Enum.KeyCode.Minus] = "-",
-        [Enum.KeyCode.Equals] = "=",
-        [Enum.KeyCode.LeftBracket] = "[",
-        [Enum.KeyCode.RightBracket] = "]",
-        [Enum.KeyCode.Semicolon] = ";",
-        [Enum.KeyCode.Quote] = "'",
-        [Enum.KeyCode.Comma] = ",",
-        [Enum.KeyCode.Period] = ".",
-        [Enum.KeyCode.Slash] = "/",
-        [Enum.KeyCode.Backslash] = "\\",
-        [Enum.KeyCode.Tilde] = "~",
-    }
-    if keyCodes[input.KeyCode] then
-        return keyCodes[input.KeyCode]
-    end
-    local keyName = tostring(input.KeyCode)
-    keyName = keyName:gsub("Enum.KeyCode.", "")
-    if #keyName == 1 then
-        return keyName
-    end
-    return keyName
-end
-
--- ============================
--- CONFIGURATION SYSTEM
--- ============================
-
-function ShadowField:SaveConfiguration(folderName, fileName, data)
-    local baseFolder = "ShadowField"
-    if folderName then
-        baseFolder = baseFolder .. "/" .. folderName
-    end
-    if not isFolder(baseFolder) then
-        makeFolder(baseFolder)
-    end
-    local path = baseFolder .. "/" .. (fileName or "Config") .. ".json"
-    local success, encoded = pcall(HttpService.JSONEncode, HttpService, data)
-    if success then
-        pcall(write, path, encoded)
-    end
-end
-
-function ShadowField:LoadConfiguration(folderName, fileName)
-    local baseFolder = "ShadowField"
-    if folderName then
-        baseFolder = baseFolder .. "/" .. folderName
-    end
-    local path = baseFolder .. "/" .. (fileName or "Config") .. ".json"
-    if isFile(path) then
-        local success, data = pcall(read, path)
-        if success then
-            local decoded = HttpService:JSONDecode(data)
-            if decoded then
-                return decoded
+local function applyThemeColors()
+    for _, t in ipairs(Aquafield._themed) do
+        local inst, key, role = t.inst, t.key, t.role
+        if inst and inst.Parent then
+            local c = Aquafield.Theme[key]
+            if c then
+                if role == "text" then inst.TextColor3 = c
+                elseif role == "image" then inst.ImageColor3 = c
+                elseif role == "stroke" and inst:IsA("UIStroke") then inst.Color = c
+                else inst.BackgroundColor3 = c end
             end
         end
     end
-    return {}
 end
 
--- ============================
--- NOTIFICATION SYSTEM
--- ============================
+----------------------------------------------------------------
+-- DRAG
+----------------------------------------------------------------
+local function makeDraggable(frame, handle)
+    handle = handle or frame
+    local dragging, dragStart, startPos
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; dragStart = input.Position; startPos = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then dragging = false end
+            end)
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+                      or input.UserInputType == Enum.UserInputType.Touch) then
+            local d = input.Position - dragStart
+            frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
+                                       startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        end
+    end)
+end
 
-function ShadowField:ShowNotification(notificationData, parentScreen)
-    if not parentScreen then return end
-    
-    local theme = Themes[notificationData.Theme or "Default"]
-    local notifTheme = theme.Notification
-    local elemTheme = theme.Element
-    
-    local notif = self:Create("Frame", {
-        Name = "Notification",
-        BackgroundColor3 = notifTheme.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 380, 0, 0),
-        Position = UDim2.new(0.5, 0, 0.5, -50),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        ClipsDescendants = true,
-        Parent = parentScreen,
+----------------------------------------------------------------
+-- ROOT GUI
+----------------------------------------------------------------
+local function getGuiParent()
+    local ok, hui = pcall(function() return gethui and gethui() end)
+    if ok and hui then return hui end
+    if RunService:IsStudio() then return LP:WaitForChild("PlayerGui") end
+    return CoreGui
+end
+
+-- Remove old instances
+for _, c in ipairs(getGuiParent():GetChildren()) do
+    if c.Name == "Aquafield" then pcall(function() c:Destroy() end) end
+end
+
+local ScreenGui = new("ScreenGui", {
+    Name = "Aquafield", ResetOnSpawn = false,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+    IgnoreGuiInset = true, Parent = getGuiParent(),
+})
+
+-- Notification container
+local NotifHolder = new("Frame", {
+    Name = "Notifications", AnchorPoint = Vector2.new(1, 1),
+    Position = UDim2.new(1, -20, 1, -20),
+    Size = UDim2.new(0, 320, 1, -40),
+    BackgroundTransparency = 1, Parent = ScreenGui,
+})
+new("UIListLayout", {
+    Padding = UDim.new(0, 10),
+    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+    VerticalAlignment = Enum.VerticalAlignment.Bottom,
+    SortOrder = Enum.SortOrder.LayoutOrder, Parent = NotifHolder,
+})
+
+----------------------------------------------------------------
+-- NOTIFY (Rayfield-compatible signature)
+----------------------------------------------------------------
+function Aquafield:Notify(opts)
+    opts = opts or {}
+    local title    = opts.Title or "Notification"
+    local content  = opts.Content or ""
+    local duration = opts.Duration or 4
+    local image    = opts.Image
+    local th       = Aquafield.Theme
+
+    -- support Rayfield numeric Image ids
+    if typeof(image) == "number" then image = "rbxassetid://" .. tostring(image) end
+
+    local card = new("Frame", {
+        Size = UDim2.new(1, 0, 0, 74),
+        BackgroundColor3 = th.Sidebar, BackgroundTransparency = 0.05,
+        Position = UDim2.new(1, 50, 0, 0), Parent = NotifHolder,
     })
-    
-    -- Border line
-    local border = self:Create("Frame", {
-        BackgroundColor3 = notifTheme.BorderColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 2),
-        Position = UDim2.new(0, 0, 0, 0),
-        Parent = notif,
+    corner(card, 10)
+    stroke(card, th.Border, 1, 0.4)
+    themed(card, "Sidebar")
+
+    local accent = new("Frame", {
+        Size = UDim2.new(0, 3, 1, -16),
+        Position = UDim2.new(0, 8, 0, 8),
+        BackgroundColor3 = th.Accent, BorderSizePixel = 0, Parent = card,
     })
-    
-    -- Shadow
-    local shadow = self:Create("ImageLabel", {
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 10, 1, 10),
-        Position = UDim2.new(0, -5, 0, -5),
-        Image = "rbxassetid://1316045217",
-        ImageColor3 = Color3.fromRGB(0, 0, 0),
-        ImageTransparency = 0.6,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(10, 10, 118, 118),
-        Parent = notif,
+    corner(accent, 2); themed(accent, "Accent")
+
+    local left = 18
+    if image then
+        local img = new("ImageLabel", {
+            Image = image, Size = UDim2.new(0, 30, 0, 30),
+            Position = UDim2.new(0, 18, 0, 14),
+            BackgroundTransparency = 1,
+            ImageColor3 = th.Accent, Parent = card,
+        })
+        themed(img, "Accent", "image")
+        left = 56
+    end
+
+    local titleLbl = new("TextLabel", {
+        Text = title, Font = Enum.Font.GothamBold, TextSize = 14,
+        TextColor3 = th.Text, BackgroundTransparency = 1,
+        Position = UDim2.new(0, left, 0, 10),
+        Size = UDim2.new(1, -left - 12, 0, 18),
+        TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
     })
-    
-    -- Title
-    local title = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -30, 0, 22),
-        Position = UDim2.new(0, 15, 0, 12),
-        Font = Enum.Font.GothamSemibold,
-        Text = notificationData.Title or "Notification",
-        TextColor3 = notifTheme.TextColor,
-        TextSize = 16,
+    themed(titleLbl, "Text", "text")
+
+    local body = new("TextLabel", {
+        Text = content, Font = Enum.Font.Gotham, TextSize = 12,
+        TextColor3 = th.SubText, BackgroundTransparency = 1,
+        Position = UDim2.new(0, left, 0, 30),
+        Size = UDim2.new(1, -left - 12, 1, -40),
         TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = notif,
+        TextYAlignment = Enum.TextYAlignment.Top, TextWrapped = true, Parent = card,
     })
-    
-    -- Close button
-    local closeBtn = self:Create("ImageButton", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 20, 0, 20),
-        Position = UDim2.new(1, -30, 0, 12),
-        Image = "rbxassetid://6031094678",
-        ImageColor3 = Color3.fromRGB(150, 150, 160),
-        Parent = notif,
+    themed(body, "SubText", "text")
+
+    local bar = new("Frame", {
+        Size = UDim2.new(1, -16, 0, 2),
+        Position = UDim2.new(0, 8, 1, -6),
+        BackgroundColor3 = th.Accent, BorderSizePixel = 0, Parent = card,
     })
-    
-    -- Content
-    local content = notificationData.Content or ""
-    local textSize = self:GetTextSize(content, Enum.Font.Gotham, 14, 350)
-    
-    local contentLabel = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -30, 0, math.max(textSize.Y + 5, 20)),
-        Position = UDim2.new(0, 15, 0, 38),
-        Font = Enum.Font.Gotham,
-        Text = content,
-        TextColor3 = notifTheme.SubTextColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        TextWrapped = true,
-        Parent = notif,
+    corner(bar, 2); themed(bar, "Accent")
+
+    tween(card, 0.35, { Position = UDim2.new(0, 0, 0, 0) }, Enum.EasingStyle.Quint)
+    tween(bar, duration, { Size = UDim2.new(0, 0, 0, 2) }, Enum.EasingStyle.Linear)
+
+    task.delay(duration, function()
+        tween(card, 0.3, { Position = UDim2.new(1, 50, 0, 0), BackgroundTransparency = 1 })
+        task.wait(0.35); card:Destroy()
+    end)
+end
+
+function Aquafield:SetTheme(name)
+    if not Themes[name] then return end
+    Aquafield.ThemeName = name
+    Aquafield.Theme = Themes[name]
+    applyThemeColors()
+end
+
+----------------------------------------------------------------
+-- CONFIG SAVING
+----------------------------------------------------------------
+local function configPath(w)
+    local folder = w.Cfg.FolderName
+    if folder and #folder > 0 then
+        return ("%s/%s.json"):format(folder, w.Cfg.FileName or "Config")
+    end
+    return ("Aquafield_%s.json"):format(w.Cfg.FileName or "Config")
+end
+
+local function saveConfig(w)
+    if not (w and w.Cfg and w.Cfg.Enabled and writefile) then return end
+    pcall(function()
+        if w.Cfg.FolderName and #w.Cfg.FolderName > 0 and makefolder and isfolder
+           and not isfolder(w.Cfg.FolderName) then makefolder(w.Cfg.FolderName) end
+        local data = {}
+        for k, v in pairs(Aquafield.Flags) do
+            local cv = v.CurrentValue
+            if typeof(cv) == "Color3" then
+                data[k] = {"Color3", cv.R, cv.G, cv.B}
+            else
+                data[k] = cv
+            end
+        end
+        writefile(configPath(w), HttpService:JSONEncode(data))
+    end)
+end
+
+local function loadConfigFor(w)
+    if not (w and w.Cfg and w.Cfg.Enabled and readfile and isfile) then return end
+    pcall(function()
+        if not isfile(configPath(w)) then return end
+        local data = HttpService:JSONDecode(readfile(configPath(w)))
+        for k, v in pairs(data) do
+            local f = Aquafield.Flags[k]
+            if f and f.Set then
+                if type(v) == "table" and v[1] == "Color3" then
+                    f:Set(Color3.new(v[2], v[3], v[4]))
+                else
+                    f:Set(v)
+                end
+            end
+        end
+    end)
+end
+
+-- Rayfield API: Aquafield:LoadConfiguration() loads for the most recent window
+function Aquafield:LoadConfiguration()
+    local w = Aquafield._windows[#Aquafield._windows]
+    if w then loadConfigFor(w) end
+end
+
+----------------------------------------------------------------
+-- LOADING SCREEN
+----------------------------------------------------------------
+local function showLoadingScreen(title, subtitle, theme)
+    local th = theme
+    local frame = new("Frame", {
+        Size = UDim2.new(0, 320, 0, 90),
+        Position = UDim2.new(0.5, -160, 0.5, -45),
+        BackgroundColor3 = th.Background, BorderSizePixel = 0, Parent = ScreenGui,
     })
-    
-    -- Duration bar
-    local duration = notificationData.Duration or 5
-    local barContainer = self:Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(40, 40, 50),
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 3),
-        Position = UDim2.new(0, 0, 1, -3),
-        Parent = notif,
+    corner(frame, 10); stroke(frame, th.Border, 1, 0.4)
+    local t = new("TextLabel", {
+        Text = title or "Aquafield", Font = Enum.Font.GothamBold, TextSize = 16,
+        TextColor3 = th.Text, BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 14), Size = UDim2.new(1, 0, 0, 20), Parent = frame,
     })
-    
-    local bar = self:Create("Frame", {
-        BackgroundColor3 = notifTheme.BorderColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0),
-        Parent = barContainer,
+    local s = new("TextLabel", {
+        Text = subtitle or "", Font = Enum.Font.Gotham, TextSize = 12,
+        TextColor3 = th.SubText, BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 36), Size = UDim2.new(1, 0, 0, 16), Parent = frame,
     })
-    
-    -- Actions
-    local actions = notificationData.Actions
-    local actionButtons = {}
-    local buttonStartY = 38 + contentLabel.Size.Y.Offset + 8
-    
-    if actions and #actions > 0 then
-        for i, action in ipairs(actions) do
-            local btn = self:Create("TextButton", {
-                BackgroundColor3 = elemTheme.BackgroundColor,
-                BorderSizePixel = 0,
-                Size = UDim2.new(0.5, -20, 0, 30),
-                Position = UDim2.new(0, 15 + ((i-1) * (0.5)), 0, buttonStartY),
-                Font = Enum.Font.GothamSemibold,
-                Text = action.Name or "Action",
-                TextColor3 = notifTheme.TextColor,
-                TextSize = 14,
-                Parent = notif,
+    local barBg = new("Frame", {
+        Size = UDim2.new(1, -40, 0, 4),
+        Position = UDim2.new(0, 20, 1, -18),
+        BackgroundColor3 = th.Border, BorderSizePixel = 0, Parent = frame,
+    })
+    corner(barBg, 2)
+    local fill = new("Frame", {
+        Size = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = th.Accent, BorderSizePixel = 0, Parent = barBg,
+    })
+    corner(fill, 2)
+    tween(fill, 0.9, { Size = UDim2.new(1, 0, 1, 0) }, Enum.EasingStyle.Quad)
+    task.delay(1.1, function()
+        tween(frame, 0.25, { BackgroundTransparency = 1 })
+        for _, c in ipairs(frame:GetDescendants()) do
+            if c:IsA("TextLabel") then tween(c, 0.25, { TextTransparency = 1 })
+            elseif c:IsA("Frame") then tween(c, 0.25, { BackgroundTransparency = 1 })
+            elseif c:IsA("UIStroke") then tween(c, 0.25, { Transparency = 1 })
+            end
+        end
+        task.wait(0.3); frame:Destroy()
+    end)
+end
+
+----------------------------------------------------------------
+-- KEY SYSTEM (basic)
+----------------------------------------------------------------
+local function runKeySystem(settings, theme, onSuccess)
+    local th = theme
+    local keys = settings.Key or {}
+    if type(keys) ~= "table" then keys = { tostring(keys) } end
+
+    -- saved key
+    local saveFile = "Aquafield_" .. (settings.FileName or "Key") .. ".txt"
+    if settings.SaveKey and isfile and readfile and isfile(saveFile) then
+        local saved = readfile(saveFile)
+        for _, k in ipairs(keys) do
+            if tostring(saved) == tostring(k) then onSuccess() return end
+        end
+    end
+
+    local frame = new("Frame", {
+        Size = UDim2.new(0, 320, 0, 200),
+        Position = UDim2.new(0.5, -160, 0.5, -100),
+        BackgroundColor3 = th.Background, BorderSizePixel = 0, Parent = ScreenGui,
+    })
+    corner(frame, 10); stroke(frame, th.Border, 1, 0.4)
+    new("TextLabel", {
+        Text = settings.Title or "Key System", Font = Enum.Font.GothamBold, TextSize = 16,
+        TextColor3 = th.Text, BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 14), Size = UDim2.new(1, 0, 0, 20), Parent = frame,
+    })
+    new("TextLabel", {
+        Text = settings.Subtitle or "", Font = Enum.Font.Gotham, TextSize = 12,
+        TextColor3 = th.SubText, BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 36), Size = UDim2.new(1, 0, 0, 16), Parent = frame,
+    })
+    new("TextLabel", {
+        Text = settings.Note or "", Font = Enum.Font.Gotham, TextSize = 11,
+        TextColor3 = th.SubText, BackgroundTransparency = 1, TextWrapped = true,
+        Position = UDim2.new(0, 14, 0, 56), Size = UDim2.new(1, -28, 0, 36), Parent = frame,
+    })
+    local box = new("TextBox", {
+        PlaceholderText = "Enter key...", Text = "",
+        Font = Enum.Font.Gotham, TextSize = 13,
+        TextColor3 = th.Text, PlaceholderColor3 = th.SubText,
+        BackgroundColor3 = th.Element, ClearTextOnFocus = false,
+        Position = UDim2.new(0, 14, 0, 102), Size = UDim2.new(1, -28, 0, 32), Parent = frame,
+    })
+    corner(box, 6); stroke(box, th.Border, 1, 0.4)
+    local btn = new("TextButton", {
+        Text = "Submit", Font = Enum.Font.GothamBold, TextSize = 13,
+        TextColor3 = th.Background, BackgroundColor3 = th.Accent,
+        Position = UDim2.new(0, 14, 0, 144), Size = UDim2.new(1, -28, 0, 32),
+        AutoButtonColor = false, Parent = frame,
+    })
+    corner(btn, 6)
+
+    btn.MouseButton1Click:Connect(function()
+        local entered = box.Text
+        local keysNow = keys
+        if settings.GrabKeyFromSite and #keys == 1 then
+            pcall(function() keysNow = { game:HttpGet(keys[1]) } end)
+        end
+        for _, k in ipairs(keysNow) do
+            if tostring(entered) == tostring(k) then
+                if settings.SaveKey and writefile then
+                    pcall(writefile, saveFile, tostring(entered))
+                end
+                frame:Destroy(); onSuccess(); return
+            end
+        end
+        box.Text = ""; box.PlaceholderText = "Invalid key, try again"
+    end)
+end
+
+----------------------------------------------------------------
+-- WINDOW
+----------------------------------------------------------------
+function Aquafield:CreateWindow(opts)
+    opts = opts or {}
+    local themeName = opts.Theme
+    if themeName and Themes[themeName] then
+        Aquafield.ThemeName = themeName
+        Aquafield.Theme = Themes[themeName]
+    end
+    local th = Aquafield.Theme
+
+    local Window = {
+        Tabs = {},
+        Cfg = opts.ConfigurationSaving or {},
+    }
+
+    local function build()
+        if not opts.DisableAquafieldPrompts then
+            showLoadingScreen(opts.LoadingTitle or "Aquafield",
+                              opts.LoadingSubtitle or "Interface Suite", th)
+        end
+        task.wait(opts.DisableAquafieldPrompts and 0 or 1.2)
+
+        local Main = new("Frame", {
+            Name = "Main",
+            Size = UDim2.new(0, 560, 0, 380),
+            Position = UDim2.new(0.5, -280, 0.5, -190),
+            BackgroundColor3 = th.Background, BorderSizePixel = 0,
+            Parent = ScreenGui, ClipsDescendants = true,
+        })
+        corner(Main, 12); stroke(Main, th.Border, 1, 0.2); themed(Main, "Background")
+
+        -- Topbar
+        local Top = new("Frame", {
+            Size = UDim2.new(1, 0, 0, 38),
+            BackgroundColor3 = th.Topbar, BorderSizePixel = 0, Parent = Main,
+        })
+        themed(Top, "Topbar")
+        new("Frame", { Size = UDim2.new(1, 0, 0, 1), Position = UDim2.new(0, 0, 1, 0),
+            BackgroundColor3 = th.Border, BorderSizePixel = 0, Parent = Top })
+        makeDraggable(Main, Top)
+
+        local titleX = 16
+        if opts.Icon and opts.Icon ~= 0 then
+            local iconImg = typeof(opts.Icon) == "number"
+                and ("rbxassetid://" .. tostring(opts.Icon))
+                or tostring(opts.Icon)
+            local ic = new("ImageLabel", {
+                Image = iconImg, Size = UDim2.new(0, 18, 0, 18),
+                Position = UDim2.new(0, 14, 0.5, -9),
+                BackgroundTransparency = 1, ImageColor3 = th.Accent, Parent = Top,
             })
-            
-            local btnUICorner = self:Create("UICorner", {
-                CornerRadius = UDim.new(0, 6),
-                Parent = btn,
+            themed(ic, "Accent", "image")
+            titleX = 40
+        end
+
+        local Title = new("TextLabel", {
+            Text = opts.Name or "Aquafield",
+            Font = Enum.Font.GothamBold, TextSize = 14,
+            TextColor3 = th.Text, BackgroundTransparency = 1,
+            Position = UDim2.new(0, titleX, 0, 0),
+            Size = UDim2.new(0.7, 0, 1, 0),
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = Top,
+        })
+        themed(Title, "Text", "text")
+
+        local function topBtn(icon, xOff)
+            local b = new("TextButton", {
+                Text = icon, Font = Enum.Font.GothamBold, TextSize = 16,
+                TextColor3 = th.SubText, BackgroundTransparency = 1,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, xOff, 0.5, 0),
+                Size = UDim2.new(0, 24, 0, 24), Parent = Top,
             })
-            
+            themed(b, "SubText", "text")
+            return b
+        end
+        local CloseBtn = topBtn("✕", -10)
+        local MinBtn   = topBtn("—", -40)
+
+        -- Sidebar
+        local Side = new("Frame", {
+            Size = UDim2.new(0, 140, 1, -38),
+            Position = UDim2.new(0, 0, 0, 38),
+            BackgroundColor3 = th.Sidebar, BorderSizePixel = 0, Parent = Main,
+        })
+        themed(Side, "Sidebar")
+        new("Frame", { Size = UDim2.new(0, 1, 1, 0), Position = UDim2.new(1, 0, 0, 0),
+            BackgroundColor3 = th.Border, BorderSizePixel = 0, Parent = Side })
+
+        local SideList = new("Frame", {
+            Size = UDim2.new(1, 0, 1, -110),
+            BackgroundTransparency = 1, Parent = Side,
+        })
+        pad(SideList, 8)
+        new("UIListLayout", {
+            Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = SideList,
+        })
+
+        -- Theme switcher (Aquafield bonus)
+        local ThemeBox = new("Frame", {
+            AnchorPoint = Vector2.new(0, 1),
+            Position = UDim2.new(0, 0, 1, -8),
+            Size = UDim2.new(1, 0, 0, 90),
+            BackgroundTransparency = 1, Parent = Side,
+        })
+        pad(ThemeBox, 8)
+        new("UIListLayout", { Padding = UDim.new(0, 6), Parent = ThemeBox })
+        new("TextLabel", {
+            Text = "THEME", Font = Enum.Font.GothamBold, TextSize = 10,
+            TextColor3 = th.SubText, BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 12),
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = ThemeBox,
+        })
+        local swatchRow = new("Frame", {
+            Size = UDim2.new(1, 0, 0, 22), BackgroundTransparency = 1, Parent = ThemeBox,
+        })
+        new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal,
+            Padding = UDim.new(0, 6), Parent = swatchRow })
+        for _, name in ipairs({"Crimson", "MatrixGreen", "Ocean"}) do
+            local sw = new("TextButton", {
+                Text = "", BackgroundColor3 = Themes[name].Accent,
+                Size = UDim2.new(0, 22, 0, 22), BorderSizePixel = 0, Parent = swatchRow,
+            })
+            corner(sw, 11); stroke(sw, Color3.fromRGB(255,255,255), 1, 0.8)
+            sw.MouseButton1Click:Connect(function() Aquafield:SetTheme(name) end)
+        end
+
+        local Container = new("Frame", {
+            Size = UDim2.new(1, -140, 1, -38),
+            Position = UDim2.new(0, 140, 0, 38),
+            BackgroundTransparency = 1, Parent = Main,
+        })
+
+        Window._Main = Main
+        Window._SideList = SideList
+        Window._Container = Container
+
+        -- minimize / close
+        local minimized = false
+        function Window:Toggle()
+            minimized = not minimized
+            tween(Main, 0.25, { Size = minimized and UDim2.new(0, 560, 0, 38)
+                                              or UDim2.new(0, 560, 0, 380) })
+        end
+        MinBtn.MouseButton1Click:Connect(function() Window:Toggle() end)
+        CloseBtn.MouseButton1Click:Connect(function()
+            saveConfig(Window)
+            tween(Main, 0.25, { Size = UDim2.new(0, 0, 0, 0),
+                                Position = UDim2.new(0.5, 0, 0.5, 0),
+                                BackgroundTransparency = 1 })
+            task.wait(0.3); ScreenGui:Destroy()
+        end)
+
+        Main.Size = UDim2.new(0, 0, 0, 0)
+        Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+        tween(Main, 0.35, { Size = UDim2.new(0, 560, 0, 380),
+                            Position = UDim2.new(0.5, -280, 0.5, -190) },
+                           Enum.EasingStyle.Back)
+        Window._ready = true
+    end
+
+    -- Key system gating
+    if opts.KeySystem then
+        runKeySystem(opts.KeySettings or {}, th, function() task.spawn(build) end)
+    else
+        task.spawn(build)
+    end
+
+    -- block until ready so CreateTab works synchronously
+    local timeout = 0
+    while not Window._ready and timeout < 30 do task.wait(0.05); timeout = timeout + 0.05 end
+
+    ----------------------------------------------------------------
+    -- TABS
+    ----------------------------------------------------------------
+    local activeTab
+    function Window:CreateTab(name, icon)
+        local Tab = { Name = name }
+        local SideList = Window._SideList
+        local Container = Window._Container
+        local th = Aquafield.Theme
+
+        local Btn = new("TextButton", {
+            Text = "", Size = UDim2.new(1, 0, 0, 30),
+            BackgroundColor3 = th.Element, BackgroundTransparency = 1,
+            AutoButtonColor = false, Parent = SideList,
+        })
+        corner(Btn, 6); themed(Btn, "Element")
+
+        local labelX = 10
+        if icon and icon ~= 0 then
+            local iconImg = typeof(icon) == "number"
+                and ("rbxassetid://" .. tostring(icon))
+                or tostring(icon)
+            local img = new("ImageLabel", {
+                Image = iconImg, Size = UDim2.new(0, 16, 0, 16),
+                Position = UDim2.new(0, 8, 0.5, -8),
+                BackgroundTransparency = 1, ImageColor3 = th.SubText, Parent = Btn,
+            })
+            themed(img, "SubText", "image")
+            labelX = 30
+        end
+        local lbl = new("TextLabel", {
+            Text = name, Font = Enum.Font.GothamMedium, TextSize = 13,
+            TextColor3 = th.SubText, BackgroundTransparency = 1,
+            Position = UDim2.new(0, labelX, 0, 0),
+            Size = UDim2.new(1, -labelX - 4, 1, 0),
+            TextXAlignment = Enum.TextXAlignment.Left, Parent = Btn,
+        })
+        themed(lbl, "SubText", "text")
+
+        local Page = new("ScrollingFrame", {
+            Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
+            BorderSizePixel = 0, ScrollBarThickness = 3,
+            ScrollBarImageColor3 = th.Accent,
+            CanvasSize = UDim2.new(0,0,0,0), Visible = false, Parent = Container,
+        })
+        pad(Page, 12)
+        local list = new("UIListLayout", {
+            Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = Page,
+        })
+        list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            Page.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 24)
+        end)
+
+        local function select()
+            if activeTab then
+                activeTab.Page.Visible = false
+                tween(activeTab.Btn, 0.15, { BackgroundTransparency = 1 })
+                activeTab.Lbl.TextColor3 = Aquafield.Theme.SubText
+            end
+            activeTab = { Page = Page, Btn = Btn, Lbl = lbl }
+            Page.Visible = true
+            tween(Btn, 0.15, { BackgroundTransparency = 0 })
+            lbl.TextColor3 = Aquafield.Theme.Text
+        end
+        Btn.MouseButton1Click:Connect(select)
+        if not activeTab then select() end
+
+        local function baseElement(h)
+            local th = Aquafield.Theme
+            local f = new("Frame", {
+                Size = UDim2.new(1, 0, 0, h or 36),
+                BackgroundColor3 = th.Element, BorderSizePixel = 0, Parent = Page,
+            })
+            corner(f, 6); stroke(f, th.Border, 1, 0.6); themed(f, "Element")
+            return f
+        end
+
+        ------------------------------------------------------------
+        function Tab:CreateSection(title)
+            local th = Aquafield.Theme
+            local s = new("Frame", { Size = UDim2.new(1, 0, 0, 20),
+                BackgroundTransparency = 1, Parent = Page })
+            local l = new("TextLabel", {
+                Text = string.upper(title), Font = Enum.Font.GothamBold, TextSize = 11,
+                TextColor3 = th.Accent, BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = s,
+            })
+            themed(l, "Accent", "text")
+            return { Set = function(_, t) l.Text = string.upper(t) end }
+        end
+
+        function Tab:CreateLabel(text)
+            local f = baseElement(28)
+            local l = new("TextLabel", {
+                Text = text, Font = Enum.Font.Gotham, TextSize = 12,
+                TextColor3 = Aquafield.Theme.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(1, -16, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(l, "Text", "text")
+            return { Set = function(_, t) l.Text = t end }
+        end
+
+        function Tab:CreateParagraph(o)
+            local f = baseElement(54)
+            f.AutomaticSize = Enum.AutomaticSize.Y; pad(f, 10)
+            local t = new("TextLabel", {
+                Text = o.Title or "", Font = Enum.Font.GothamBold, TextSize = 13,
+                TextColor3 = Aquafield.Theme.Text, BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 16),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(t, "Text", "text")
+            local c = new("TextLabel", {
+                Text = o.Content or "", Font = Enum.Font.Gotham, TextSize = 12,
+                TextColor3 = Aquafield.Theme.SubText, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 0, 0, 18),
+                Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+                TextWrapped = true,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Top, Parent = f,
+            })
+            themed(c, "SubText", "text")
+            return { Set = function(_, p) p = p or {}; if p.Title then t.Text = p.Title end
+                                                    if p.Content then c.Text = p.Content end end }
+        end
+
+        ------------------------------------------------------------
+        function Tab:CreateButton(o)
+            local th = Aquafield.Theme
+            local f = baseElement(36)
+            local btn = new("TextButton", { Text = "", BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0), Parent = f })
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Button", Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -40, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = btn,
+            })
+            themed(lbl, "Text", "text")
+            local arr = new("TextLabel", {
+                Text = "›", Font = Enum.Font.GothamBold, TextSize = 18,
+                TextColor3 = th.Accent, BackgroundTransparency = 1,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -10, 0.5, 0),
+                Size = UDim2.new(0, 18, 0, 18), Parent = btn,
+            })
+            themed(arr, "Accent", "text")
             btn.MouseEnter:Connect(function()
-                self:TweenObject(btn, {BackgroundColor3 = Color3.fromRGB(35, 35, 45)}, TweenInfo.new(0.15))
+                tween(f, 0.15, { BackgroundColor3 = Aquafield.Theme.ElementHover })
             end)
             btn.MouseLeave:Connect(function()
-                self:TweenObject(btn, {BackgroundColor3 = elemTheme.BackgroundColor}, TweenInfo.new(0.15))
+                tween(f, 0.15, { BackgroundColor3 = Aquafield.Theme.Element })
             end)
             btn.MouseButton1Click:Connect(function()
-                if action.Callback then
-                    action.Callback()
-                end
-                self:DestroyNotification(notif)
+                local rip = new("Frame", {
+                    BackgroundColor3 = Aquafield.Theme.Accent, BackgroundTransparency = 0.6,
+                    BorderSizePixel = 0, Size = UDim2.new(0, 0, 0, 0),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.new(0.5, 0, 0.5, 0), Parent = f,
+                })
+                corner(rip, 50)
+                tween(rip, 0.4, { Size = UDim2.new(1, 100, 1, 100), BackgroundTransparency = 1 })
+                task.delay(0.4, function() rip:Destroy() end)
+                if o.Callback then pcall(o.Callback) end
             end)
-            
-            table.insert(actionButtons, btn)
+            return { Set = function(_, t) lbl.Text = t end }
         end
-    end
-    
-    -- Calculate total height
-    local totalHeight = buttonStartY + (#actionButtons > 0 and 38 or 0) + 3
-    notif.Size = UDim2.new(0, 380, 0, totalHeight + 10)
-    
-    -- Animate in
-    notif.BackgroundTransparency = 1
-    title.TextTransparency = 1
-    contentLabel.TextTransparency = 1
-    border.BackgroundTransparency = 1
-    for _, btn in ipairs(actionButtons) do
-        btn.BackgroundTransparency = 1
-        btn.TextTransparency = 1
-    end
-    
-    notif.Size = UDim2.new(0, 380, 0, 0)
-    self:TweenObject(notif, {Size = UDim2.new(0, 380, 0, totalHeight + 10)}, TweenInfo.new(0.4, Enum.EasingStyle.Quint))
-    self:TweenObject(notif, {BackgroundTransparency = 0}, TweenInfo.new(0.3))
-    self:TweenObject(title, {TextTransparency = 0}, TweenInfo.new(0.3))
-    self:TweenObject(contentLabel, {TextTransparency = 0}, TweenInfo.new(0.35))
-    self:TweenObject(border, {BackgroundTransparency = 0}, TweenInfo.new(0.3))
-    for _, btn in ipairs(actionButtons) do
-        self:TweenObject(btn, {BackgroundTransparency = 0}, TweenInfo.new(0.35))
-        self:TweenObject(btn, {TextTransparency = 0}, TweenInfo.new(0.4))
-    end
-    
-    -- Animate duration bar
-    if duration > 0 then
-        self:TweenObject(bar, {Size = UDim2.new(0, 0, 1, 0)}, TweenInfo.new(duration, Enum.EasingStyle.Linear))
-    end
-    
-    -- Close button
-    closeBtn.MouseButton1Click:Connect(function()
-        self:DestroyNotification(notif)
-    end)
-    
-    -- Auto destroy
-    if duration > 0 then
-        task.delay(duration, function()
-            if notif and notif.Parent then
-                self:DestroyNotification(notif)
+
+        ------------------------------------------------------------
+        function Tab:CreateToggle(o)
+            local th = Aquafield.Theme
+            local val = o.CurrentValue and true or false
+            local f = baseElement(36)
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Toggle", Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -60, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local track = new("TextButton", {
+                Text = "", AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -10, 0.5, 0),
+                Size = UDim2.new(0, 38, 0, 20),
+                BackgroundColor3 = th.Border, AutoButtonColor = false, Parent = f,
+            })
+            corner(track, 10)
+            local knob = new("Frame", {
+                Size = UDim2.new(0, 16, 0, 16), Position = UDim2.new(0, 2, 0.5, -8),
+                BackgroundColor3 = Color3.fromRGB(255,255,255),
+                BorderSizePixel = 0, Parent = track,
+            })
+            corner(knob, 10)
+
+            local api = { CurrentValue = val }
+            function api:Set(v)
+                val = v and true or false; api.CurrentValue = val
+                local th = Aquafield.Theme
+                tween(track, 0.2, { BackgroundColor3 = val and th.Accent or th.Border })
+                tween(knob, 0.2, { Position = val and UDim2.new(1, -18, 0.5, -8)
+                                                  or UDim2.new(0, 2, 0.5, -8) })
+                if o.Callback then pcall(o.Callback, val) end
             end
-        end)
-    end
-    
-    return notif
-end
-
-function ShadowField:DestroyNotification(notif)
-    if not notif or not notif.Parent then return end
-    self:TweenObject(notif, {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 380, 0, 0)
-    }, TweenInfo.new(0.3, Enum.EasingStyle.Quint))
-    
-    for _, v in ipairs(notif:GetDescendants()) do
-        if v:IsA("TextLabel") or v:IsA("TextButton") then
-            self:TweenObject(v, {TextTransparency = 1}, TweenInfo.new(0.2))
-        elseif v:IsA("Frame") or v:IsA("ImageButton") then
-            self:TweenObject(v, {BackgroundTransparency = 1}, TweenInfo.new(0.2))
+            track.MouseButton1Click:Connect(function() api:Set(not val) end)
+            api:Set(val)
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
         end
-    end
-    
-    task.delay(0.3, function()
-        pcall(function() notif:Destroy() end)
-    end)
-end
 
--- ============================
--- WINDOW SYSTEM
--- ============================
+        ------------------------------------------------------------
+        function Tab:CreateSlider(o)
+            local th = Aquafield.Theme
+            local rng = o.Range or {0, 100}
+            local min, max = rng[1], rng[2]
+            local inc = o.Increment or 1
+            local val = o.CurrentValue or min
+            local f = baseElement(48)
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Slider", Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 10, 0, 4), Size = UDim2.new(1, -20, 0, 18),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local valLbl = new("TextLabel", {
+                Text = tostring(val) .. (o.Suffix or ""),
+                Font = Enum.Font.GothamBold, TextSize = 12,
+                TextColor3 = th.Accent, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 10, 0, 4), Size = UDim2.new(1, -20, 0, 18),
+                TextXAlignment = Enum.TextXAlignment.Right, Parent = f,
+            })
+            themed(valLbl, "Accent", "text")
+            local bar = new("Frame", {
+                Position = UDim2.new(0, 10, 1, -14),
+                Size = UDim2.new(1, -20, 0, 6),
+                BackgroundColor3 = th.Border, BorderSizePixel = 0, Parent = f,
+            })
+            corner(bar, 3)
+            local fill = new("Frame", { Size = UDim2.new(0, 0, 1, 0),
+                BackgroundColor3 = th.Accent, BorderSizePixel = 0, Parent = bar })
+            corner(fill, 3); themed(fill, "Accent")
 
-function ShadowField:CreateWindow(config)
-    if not config or not config.Name then
-        error("ShadowField: Window requires a Name")
-    end
-    
-    local theme = Themes[config.Theme or "Default"]
-    if not theme then
-        theme = Themes["Default"]
-    end
-    
-    -- Configuration
-    local configSave = config.ConfigurationSaving or {}
-    local savedData = {}
-    if configSave.Enabled then
-        savedData = self:LoadConfiguration(configSave.FolderName, configSave.FileName)
-    end
-    
-    -- Main ScreenGui
-    local screenGui = self:Create("ScreenGui", {
-        Name = "ShadowField_" .. config.Name,
-        DisplayOrder = 999,
-        IgnoreGuiInset = true,
-        Parent = HUI,
-        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-    })
-    
-    protect(screenGui)
-    
-    -- Main Frame
-    local mainFrame = self:Create("ImageLabel", {
-        Name = "MainWindow",
-        BackgroundColor3 = theme.Window.BackgroundColor,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0.5, -300, 0.5, -200),
-        Size = UDim2.new(0, 600, 0, 400),
-        Image = "rbxassetid://1316045217",
-        ImageColor3 = Color3.fromRGB(20, 20, 25),
-        ImageTransparency = 0.3,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(10, 10, 118, 118),
-        ClipsDescendants = true,
-        Parent = screenGui,
-    })
-    
-    -- UI Corner
-    local mainCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 8),
-        Parent = mainFrame,
-    })
-    
-    -- Shadow
-    local windowShadow = self:Create("ImageLabel", {
-        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 20, 1, 20),
-        Position = UDim2.new(0, -10, 0, -10),
-        Image = "rbxassetid://1316045217",
-        ImageColor3 = Color3.fromRGB(0, 0, 0),
-        ImageTransparency = 0.65,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(10, 10, 118, 118),
-        Parent = mainFrame,
-        ZIndex = -1,
-    })
-    
-    -- Topbar
-    local topbar = self:Create("Frame", {
-        Name = "Topbar",
-        BackgroundColor3 = theme.Window.TopbarColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 40),
-        Position = UDim2.new(0, 0, 0, 0),
-        Parent = mainFrame,
-    })
-    
-    local topbarCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 8),
-        Parent = topbar,
-    })
-    
-    -- Topbar bottom line (only rounds top corners)
-    local topbarFill = self:Create("Frame", {
-        BackgroundColor3 = theme.Window.TopbarColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 10),
-        Position = UDim2.new(0, 0, 0, 30),
-        Parent = topbar,
-    })
-    
-    -- Window Title
-    local windowTitle = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -50, 1, 0),
-        Position = UDim2.new(0, 15, 0, 0),
-        Font = Enum.Font.GothamSemibold,
-        Text = config.Name or "ShadowField",
-        TextColor3 = theme.Window.TitleColor,
-        TextSize = 16,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = topbar,
-    })
-    
-    -- Loading screen
-    local loadingFrame = self:Create("Frame", {
-        Name = "LoadingScreen",
-        BackgroundColor3 = theme.Window.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
-        ZIndex = 10,
-        Parent = mainFrame,
-    })
-    
-    local loadingCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 8),
-        Parent = loadingFrame,
-    })
-    
-    local loadingTitle = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0.5, 0, 0.4, 0),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Font = Enum.Font.GothamBold,
-        Text = config.LoadingTitle or "ShadowField Interface Suite",
-        TextColor3 = theme.Window.TitleColor,
-        TextSize = 22,
-        Parent = loadingFrame,
-    })
-    
-    local loadingSubtitle = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0.5, 0, 0.48, 0),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Font = Enum.Font.Gotham,
-        Text = config.LoadingSubtitle or "",
-        TextColor3 = theme.Window.SubTextColor,
-        TextSize = 14,
-        Parent = loadingFrame,
-    })
-    
-    -- Loading bar
-    local loadingBarContainer = self:Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(35, 35, 45),
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 200, 0, 4),
-        Position = UDim2.new(0.5, -100, 0.56, 0),
-        Parent = loadingFrame,
-    })
-    
-    local loadingBarCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 2),
-        Parent = loadingBarContainer,
-    })
-    
-    local loadingBar = self:Create("Frame", {
-        BackgroundColor3 = theme.Window.AccentColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 0, 1, 0),
-        Parent = loadingBarContainer,
-    })
-    
-    local loadingBarFillCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 2),
-        Parent = loadingBar,
-    })
-    
-    -- Animate loading
-    self:TweenObject(loadingBar, {Size = UDim2.new(1, 0, 1, 0)}, TweenInfo.new(1.5, Enum.EasingStyle.Quad))
-    
-    task.delay(1.8, function()
-        self:TweenObject(loadingFrame, {BackgroundTransparency = 1}, TweenInfo.new(0.4))
-        self:TweenObject(loadingTitle, {TextTransparency = 1}, TweenInfo.new(0.3))
-        self:TweenObject(loadingSubtitle, {TextTransparency = 1}, TweenInfo.new(0.3))
-        self:TweenObject(loadingBarContainer, {BackgroundTransparency = 1}, TweenInfo.new(0.3))
-        self:TweenObject(loadingBar, {BackgroundTransparency = 1}, TweenInfo.new(0.3))
-        
-        task.delay(0.5, function()
-            loadingFrame:Destroy()
-        end)
-    end)
-    
-    -- Make window draggable
-    self:MakeDraggable(mainFrame, topbar)
-    
-    -- Tabs container
-    local tabsContainer = self:Create("Frame", {
-        Name = "TabsContainer",
-        BackgroundColor3 = theme.Tab.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 160, 1, -40),
-        Position = UDim2.new(0, 0, 0, 40),
-        Parent = mainFrame,
-    })
-    
-    -- Tabs list
-    local tabsList = self:Create("ScrollingFrame", {
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -10, 1, -10),
-        Position = UDim2.new(0, 5, 0, 5),
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness = 0,
-        ScrollingDirection = Enum.ScrollingDirection.Y,
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        Parent = tabsContainer,
-    })
-    
-    -- UIListLayout for tabs
-    local tabsLayout = self:Create("UIListLayout", {
-        Padding = UDim.new(0, 4),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = tabsList,
-    })
-    
-    -- Pages container
-    local pagesContainer = self:Create("Frame", {
-        Name = "PagesContainer",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -170, 1, -50),
-        Position = UDim2.new(0, 165, 0, 45),
-        Parent = mainFrame,
-    })
-    
-    -- Window object
-    local Window = {
-        ScreenGui = screenGui,
-        MainFrame = mainFrame,
-        Topbar = topbar,
-        TabsContainer = tabsContainer,
-        TabsList = tabsList,
-        PagesContainer = pagesContainer,
-        Tabs = {},
-        Theme = theme,
-        ThemeName = config.Theme or "Default",
-        Config = config,
-        SavedData = savedData,
-        ConfigSave = configSave,
-        UIKeybind = config.ToggleUIKeybind or "K",
-        IsVisible = false,
-        LoadingScreen = loadingFrame,
-        ShowText = config.ShowText or "ShadowField",
-        
-        -- Toggle visibility
-        ToggleUI = function(self)
-            self.IsVisible = not self.IsVisible
-            if self.IsVisible then
-                mainFrame.Visible = true
-                self:TweenObject(mainFrame, {
-                    ImageTransparency = 0.3,
-                    BackgroundTransparency = 0,
-                }, TweenInfo.new(0.3))
-            else
-                self:TweenObject(mainFrame, {
-                    ImageTransparency = 1,
-                    BackgroundTransparency = 1,
-                }, TweenInfo.new(0.3))
-                task.delay(0.3, function()
-                    mainFrame.Visible = false
+            local api = { CurrentValue = val }
+            local function set(v, fire)
+                v = math.clamp(v, min, max)
+                v = math.floor(v / inc + 0.5) * inc
+                val = v; api.CurrentValue = v
+                fill.Size = UDim2.new((v - min) / math.max(max - min, 1e-6), 0, 1, 0)
+                valLbl.Text = tostring(v) .. (o.Suffix or "")
+                if fire and o.Callback then pcall(o.Callback, v) end
+            end
+            function api:Set(v) set(v, true) end
+            set(val, false)
+            if o.Callback then pcall(o.Callback, val) end
+
+            local dragging = false
+            bar.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1
+                or i.UserInputType == Enum.UserInputType.Touch then dragging = true end
+            end)
+            UserInputService.InputEnded:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1
+                or i.UserInputType == Enum.UserInputType.Touch then dragging = false end
+            end)
+            UserInputService.InputChanged:Connect(function(i)
+                if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement
+                              or i.UserInputType == Enum.UserInputType.Touch) then
+                    local rel = (i.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+                    rel = math.clamp(rel, 0, 1)
+                    set(min + rel * (max - min), true)
+                end
+            end)
+
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+
+        ------------------------------------------------------------
+        function Tab:CreateDropdown(o)
+            local th = Aquafield.Theme
+            local options = o.Options or {}
+            local multi   = o.MultipleOptions
+            local current = multi
+                and (type(o.CurrentOption) == "table" and o.CurrentOption or {})
+                or (type(o.CurrentOption) == "table" and o.CurrentOption[1] or o.CurrentOption)
+            local open = false
+
+            local f = baseElement(36)
+            f.ClipsDescendants = true
+            local btn = new("TextButton", {
+                Text = "", BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 36), Parent = f,
+            })
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Dropdown",
+                Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 10, 0, 0),
+                Size = UDim2.new(0.5, -10, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = btn,
+            })
+            themed(lbl, "Text", "text")
+            local valLbl = new("TextLabel", {
+                Font = Enum.Font.Gotham, TextSize = 12,
+                TextColor3 = th.Accent, BackgroundTransparency = 1,
+                Position = UDim2.new(0.5, 0, 0, 0),
+                Size = UDim2.new(0.5, -28, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Right, Parent = btn,
+            })
+            themed(valLbl, "Accent", "text")
+            local arr = new("TextLabel", {
+                Text = "▾", Font = Enum.Font.GothamBold, TextSize = 14,
+                TextColor3 = th.SubText, BackgroundTransparency = 1,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -10, 0.5, 0),
+                Size = UDim2.new(0, 14, 0, 14), Parent = btn,
+            })
+            themed(arr, "SubText", "text")
+
+            local listFrame = new("Frame", {
+                Size = UDim2.new(1, -20, 0, 0),
+                Position = UDim2.new(0, 10, 0, 38),
+                BackgroundTransparency = 1, Parent = f,
+            })
+            new("UIListLayout", { Padding = UDim.new(0, 4), Parent = listFrame })
+
+            local api = {}
+            local optionBtns = {}
+
+            local function isSelected(opt)
+                if multi then
+                    for _, v in ipairs(current) do if v == opt then return true end end
+                    return false
+                end
+                return current == opt
+            end
+
+            local function renderValue()
+                if multi then
+                    valLbl.Text = (#current == 0) and "None" or table.concat(current, ", ")
+                else
+                    valLbl.Text = tostring(current or "None")
+                end
+            end
+
+            local function refreshHighlights()
+                for opt, b in pairs(optionBtns) do
+                    b.TextColor3 = isSelected(opt) and Aquafield.Theme.Accent
+                                                   or Aquafield.Theme.SubText
+                end
+            end
+
+            local function build()
+                for _, c in ipairs(listFrame:GetChildren()) do
+                    if c:IsA("TextButton") then c:Destroy() end
+                end
+                optionBtns = {}
+                for _, opt in ipairs(options) do
+                    local ob = new("TextButton", {
+                        Text = opt, Font = Enum.Font.Gotham, TextSize = 12,
+                        TextColor3 = Aquafield.Theme.SubText,
+                        BackgroundColor3 = Aquafield.Theme.Background,
+                        AutoButtonColor = false,
+                        Size = UDim2.new(1, 0, 0, 24), Parent = listFrame,
+                    })
+                    corner(ob, 4)
+                    optionBtns[opt] = ob
+                    ob.MouseButton1Click:Connect(function()
+                        if multi then
+                            local found
+                            for i, v in ipairs(current) do
+                                if v == opt then found = i break end
+                            end
+                            if found then table.remove(current, found)
+                            else table.insert(current, opt) end
+                        else
+                            current = opt
+                        end
+                        api.CurrentOption = current
+                        renderValue(); refreshHighlights()
+                        if o.Callback then pcall(o.Callback, current) end
+                    end)
+                end
+                refreshHighlights()
+            end
+            build()
+
+            btn.MouseButton1Click:Connect(function()
+                open = not open
+                local h = 36 + (open and (#options * 28 + 8) or 0)
+                tween(f, 0.2, { Size = UDim2.new(1, 0, 0, h) })
+                tween(arr, 0.2, { Rotation = open and 180 or 0 })
+            end)
+
+            function api:Set(v) current = v; api.CurrentOption = v
+                renderValue(); refreshHighlights()
+                if o.Callback then pcall(o.Callback, v) end end
+            function api:Refresh(newOpts) options = newOpts; build() end
+            api.CurrentOption = current
+            renderValue()
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+
+        ------------------------------------------------------------
+        function Tab:CreateInput(o)
+            local th = Aquafield.Theme
+            local f = baseElement(36)
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Input", Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(0.4, 0, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local box = new("TextBox", {
+                PlaceholderText = o.PlaceholderText or "", Text = "",
+                Font = Enum.Font.Gotham, TextSize = 12,
+                TextColor3 = th.Text, PlaceholderColor3 = th.SubText,
+                BackgroundColor3 = th.Background,
+                ClearTextOnFocus = false,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -10, 0.5, 0),
+                Size = UDim2.new(0.55, 0, 0, 22), Parent = f,
+            })
+            corner(box, 4); stroke(box, th.Border, 1, 0.5)
+            local api = { CurrentValue = "" }
+            box.FocusLost:Connect(function(enter)
+                api.CurrentValue = box.Text
+                if o.Callback then pcall(o.Callback, box.Text, enter) end
+                if o.RemoveTextAfterFocusLost then box.Text = "" end
+            end)
+            function api:Set(v) box.Text = tostring(v); api.CurrentValue = box.Text end
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+
+        ------------------------------------------------------------
+        function Tab:CreateKeybind(o)
+            local th = Aquafield.Theme
+            local key = o.CurrentKeybind or "None"
+            local listening = false
+            local f = baseElement(36)
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Keybind", Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -90, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local btn = new("TextButton", {
+                Text = key, Font = Enum.Font.GothamBold, TextSize = 12,
+                TextColor3 = th.Accent, BackgroundColor3 = th.Background,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -10, 0.5, 0),
+                Size = UDim2.new(0, 70, 0, 22),
+                AutoButtonColor = false, Parent = f,
+            })
+            corner(btn, 4); stroke(btn, th.Border, 1, 0.5)
+
+            btn.MouseButton1Click:Connect(function()
+                listening = true; btn.Text = "..."
+            end)
+            UserInputService.InputBegan:Connect(function(i, gpe)
+                if listening and i.UserInputType == Enum.UserInputType.Keyboard then
+                    key = i.KeyCode.Name; btn.Text = key; listening = false
+                    return
+                end
+                if gpe then return end
+                if i.UserInputType == Enum.UserInputType.Keyboard and i.KeyCode.Name == key then
+                    if o.Callback then pcall(o.Callback) end
+                end
+            end)
+
+            local api = { CurrentKeybind = key }
+            function api:Set(k) key = k; btn.Text = k; api.CurrentKeybind = k end
+            api.CurrentValue = key
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+
+        ------------------------------------------------------------
+        function Tab:CreateColorPicker(o)
+            local th = Aquafield.Theme
+            local color = o.Color or Color3.fromRGB(255, 255, 255)
+            local open = false
+            local f = baseElement(36)
+            f.ClipsDescendants = true
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Color", Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(1, -50, 0, 36),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local swatch = new("TextButton", {
+                Text = "", BackgroundColor3 = color,
+                AnchorPoint = Vector2.new(1, 0),
+                Position = UDim2.new(1, -10, 0, 8),
+                Size = UDim2.new(0, 30, 0, 20),
+                AutoButtonColor = false, Parent = f,
+            })
+            corner(swatch, 4); stroke(swatch, th.Border, 1, 0.4)
+
+            local panel = new("Frame", {
+                Position = UDim2.new(0, 10, 0, 44),
+                Size = UDim2.new(1, -20, 0, 80),
+                BackgroundTransparency = 1, Parent = f,
+            })
+            local function sliderRow(name, y, getter)
+                local row = new("Frame", {
+                    Position = UDim2.new(0, 0, 0, y),
+                    Size = UDim2.new(1, 0, 0, 22),
+                    BackgroundTransparency = 1, Parent = panel,
+                })
+                new("TextLabel", { Text = name, Font = Enum.Font.GothamBold, TextSize = 11,
+                    TextColor3 = th.SubText, BackgroundTransparency = 1,
+                    Size = UDim2.new(0, 14, 1, 0), Parent = row })
+                local bar = new("Frame", {
+                    Position = UDim2.new(0, 20, 0.5, -3),
+                    Size = UDim2.new(1, -20, 0, 6),
+                    BackgroundColor3 = th.Border, BorderSizePixel = 0, Parent = row,
+                })
+                corner(bar, 3)
+                local fill = new("Frame", {
+                    Size = UDim2.new(getter(), 0, 1, 0),
+                    BackgroundColor3 =
+                        name == "R" and Color3.fromRGB(255,80,80) or
+                        name == "G" and Color3.fromRGB(80,220,120) or
+                                         Color3.fromRGB(80,160,255),
+                    BorderSizePixel = 0, Parent = bar,
+                })
+                corner(fill, 3)
+                return bar, fill
+            end
+
+            local rBar, rFill = sliderRow("R",  0, function() return color.R end)
+            local gBar, gFill = sliderRow("G", 28, function() return color.G end)
+            local bBar, bFill = sliderRow("B", 56, function() return color.B end)
+
+            local api = { CurrentValue = color }
+            local function update()
+                swatch.BackgroundColor3 = color
+                rFill.Size = UDim2.new(color.R, 0, 1, 0)
+                gFill.Size = UDim2.new(color.G, 0, 1, 0)
+                bFill.Size = UDim2.new(color.B, 0, 1, 0)
+                api.CurrentValue = color
+                if o.Callback then pcall(o.Callback, color) end
+            end
+
+            local function bind(bar, channel)
+                local drag = false
+                bar.InputBegan:Connect(function(i)
+                    if i.UserInputType == Enum.UserInputType.MouseButton1
+                    or i.UserInputType == Enum.UserInputType.Touch then drag = true end
+                end)
+                UserInputService.InputEnded:Connect(function(i)
+                    if i.UserInputType == Enum.UserInputType.MouseButton1
+                    or i.UserInputType == Enum.UserInputType.Touch then drag = false end
+                end)
+                UserInputService.InputChanged:Connect(function(i)
+                    if drag and (i.UserInputType == Enum.UserInputType.MouseMovement
+                              or i.UserInputType == Enum.UserInputType.Touch) then
+                        local rel = math.clamp((i.Position.X - bar.AbsolutePosition.X)
+                                                / bar.AbsoluteSize.X, 0, 1)
+                        local r, g, b = color.R, color.G, color.B
+                        if channel == "R" then r = rel
+                        elseif channel == "G" then g = rel
+                        else b = rel end
+                        color = Color3.new(r, g, b)
+                        update()
+                    end
                 end)
             end
-        end,
-        
-        -- Create tab
-        CreateTab = function(self, tabConfig)
-            return ShadowField:CreateTab(self, tabConfig)
-        end,
-        
-        -- Notify
-        Notify = function(self, notificationConfig)
-            notificationConfig.Theme = self.ThemeName
-            return ShadowField:ShowNotification(notificationConfig, pagesContainer.Parent.Parent)
-        end,
-        
-        -- Destroy
-        Destroy = function(self)
-            screenGui:Destroy()
-            ActiveWindows[self] = nil
-        end,
-    }
-    
-    -- Hide window initially
-    mainFrame.Visible = false
-    mainFrame.ImageTransparency = 1
-    mainFrame.BackgroundTransparency = 1
-    
-    -- Keybind toggle
-    local keybindConnection
-    keybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-        if gameProcessed then return end
-        if input.KeyCode == Enum.KeyCode[Window.UIKeybind] then
-            Window:ToggleUI()
+            bind(rBar, "R"); bind(gBar, "G"); bind(bBar, "B")
+
+            swatch.MouseButton1Click:Connect(function()
+                open = not open
+                tween(f, 0.2, { Size = UDim2.new(1, 0, 0, open and 130 or 36) })
+            end)
+
+            function api:Set(c) color = c; update() end
+            update()
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
         end
-    end)
-    
-    table.insert(UIConnections, keybindConnection)
-    
-    -- Store window reference
-    ActiveWindows[Window] = true
-    table.insert(ActiveWindows, Window)
-    
-    task.spawn(function()
-        -- Wait for loading animation
-        task.wait(2.5)
-        -- Show window after loading if ShowText feature
-        -- (Mobile support: tapping show text toggles)
-    end)
-    
+
+        return Tab
+    end -- CreateTab
+
+    -- autosave
+    if Window.Cfg and Window.Cfg.Enabled then
+        task.spawn(function()
+            while ScreenGui.Parent do task.wait(10); saveConfig(Window) end
+        end)
+    end
+
+    table.insert(Aquafield._windows, Window)
     return Window
 end
 
--- ============================
--- TAB SYSTEM
--- ============================
-
-function ShadowField:CreateTab(window, tabConfig)
-    if not tabConfig or not tabConfig.Name then
-        error("ShadowField: Tab requires a Name")
-    end
-    
-    local theme = window.Theme
-    local tabsList = window.TabsList
-    local pagesContainer = window.PagesContainer
-    
-    -- Tab button
-    local tabButton = self:Create("TextButton", {
-        Name = tabConfig.Name,
-        BackgroundColor3 = theme.Tab.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -10, 0, 34),
-        Font = Enum.Font.Gotham,
-        Text = "  " .. tabConfig.Name,
-        TextColor3 = theme.Tab.TextColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        AutoButtonColor = false,
-        Parent = tabsList,
-    })
-    
-    local tabButtonCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 6),
-        Parent = tabButton,
-    })
-    
-    -- Page frame for this tab
-    local page = self:Create("Frame", {
-        Name = tabConfig.Name .. "_Page",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0),
-        Position = UDim2.new(0, 0, 0, 0),
-        Visible = false,
-        Parent = pagesContainer,
-    })
-    
-    -- Page sections container
-    local sectionsContainer = self:Create("ScrollingFrame", {
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0),
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness = 4,
-        ScrollBarImageColor3 = Color3.fromRGB(40, 40, 50),
-        ScrollingDirection = Enum.ScrollingDirection.Y,
-        AutomaticCanvasSize = Enum.AutomaticSize.Y,
-        Parent = page,
-    })
-    
-    local sectionsLayout = self:Create("UIListLayout", {
-        Padding = UDim.new(0, 8),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = sectionsContainer,
-    })
-    
-    local sectionsPadding = self:Create("UIPadding", {
-        PaddingLeft = UDim.new(0, 12),
-        PaddingRight = UDim.new(0, 12),
-        PaddingTop = UDim.new(0, 8),
-        PaddingBottom = UDim.new(0, 8),
-        Parent = sectionsContainer,
-    })
-    
-    -- Tab object
-    local Tab = {
-        Name = tabConfig.Name,
-        Button = tabButton,
-        Page = page,
-        SectionsContainer = sectionsContainer,
-        Sections = {},
-        IsSelected = false,
-        
-        Select = function(self)
-            -- Deselect all tabs in this window
-            for _, otherTab in pairs(window.Tabs) do
-                if otherTab ~= self then
-                    otherTab.IsSelected = false
-                    self:TweenObject(otherTab.Button, {
-                        BackgroundColor3 = theme.Tab.BackgroundColor,
-                        TextColor3 = theme.Tab.TextColor,
-                    }, TweenInfo.new(0.15))
-                    otherTab.Page.Visible = false
-                end
-            end
-            
-            self.IsSelected = true
-            self:TweenObject(self.Button, {
-                BackgroundColor3 = theme.Tab.SelectedColor,
-                TextColor3 = theme.Tab.SelectedTextColor,
-            }, TweenInfo.new(0.15))
-            self.Page.Visible = true
-        end,
-        
-        CreateSection = function(self, sectionConfig)
-            return ShadowField:CreateSection(window, self, sectionConfig)
-        end,
-    }
-    
-    -- Tab button click
-    tabButton.MouseEnter:Connect(function()
-        if not Tab.IsSelected then
-            self:TweenObject(tabButton, {
-                BackgroundColor3 = theme.Tab.HoverColor,
-            }, TweenInfo.new(0.15))
-        end
-    end)
-    
-    tabButton.MouseLeave:Connect(function()
-        if not Tab.IsSelected then
-            self:TweenObject(tabButton, {
-                BackgroundColor3 = theme.Tab.BackgroundColor,
-            }, TweenInfo.new(0.15))
-        end
-    end)
-    
-    tabButton.MouseButton1Click:Connect(function()
-        Tab:Select()
-    end)
-    
-    -- Store tab
-    window.Tabs[tabConfig.Name] = Tab
-    table.insert(window.Tabs, Tab)
-    
-    -- Auto-select first tab
-    if #window.Tabs == 1 then
-        Tab:Select()
-    end
-    
-    return Tab
+-- Rayfield API parity: destroy
+function Aquafield:Destroy()
+    if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
 end
 
--- ============================
--- SECTION SYSTEM
--- ============================
-
-function ShadowField:CreateSection(window, tab, sectionConfig)
-    local theme = window.Theme
-    local elemTheme = theme.Element
-    
-    local section = self:Create("Frame", {
-        Name = sectionConfig.Name or "Section",
-        BackgroundColor3 = elemTheme.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 0),
-        Parent = tab.SectionsContainer,
-    })
-    
-    local sectionCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 8),
-        Parent = section,
-    })
-    
-    -- Section header
-    local sectionHeader = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -20, 0, 30),
-        Position = UDim2.new(0, 12, 0, 6),
-        Font = Enum.Font.GothamSemibold,
-        Text = sectionConfig.Name or "Section",
-        TextColor3 = elemTheme.TextColor,
-        TextSize = 15,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = section,
-    })
-    
-    -- Elements container
-    local elementsContainer = self:Create("Frame", {
-        Name = "Elements",
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -20, 0, 0),
-        Position = UDim2.new(0, 12, 0, 38),
-        Parent = section,
-    })
-    
-    local elementsLayout = self:Create("UIListLayout", {
-        Padding = UDim.new(0, 6),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        Parent = elementsContainer,
-    })
-    
-    -- Section object
-    local Section = {
-        Name = sectionConfig.Name,
-        SectionFrame = section,
-        ElementsContainer = elementsContainer,
-        Elements = {},
-        
-        CreateButton = function(self, btnConfig)
-            return ShadowField:CreateButton(window, self, btnConfig)
-        end,
-        
-        CreateToggle = function(self, toggleConfig)
-            return ShadowField:CreateToggle(window, self, toggleConfig)
-        end,
-        
-        CreateSlider = function(self, sliderConfig)
-            return ShadowField:CreateSlider(window, self, sliderConfig)
-        end,
-        
-        CreateDropdown = function(self, dropdownConfig)
-            return ShadowField:CreateDropdown(window, self, dropdownConfig)
-        end,
-        
-        CreateInput = function(self, inputConfig)
-            return ShadowField:CreateInput(window, self, inputConfig)
-        end,
-        
-        CreateKeybind = function(self, keybindConfig)
-            return ShadowField:CreateKeybind(window, self, keybindConfig)
-        end,
-        
-        CreateLabel = function(self, labelConfig)
-            return ShadowField:CreateLabel(window, self, labelConfig)
-        end,
-        
-        CreateSeparator = function(self)
-            return ShadowField:CreateSeparator(window, self)
-        end,
-    }
-    
-    tab.Sections[sectionConfig.Name] = Section
-    table.insert(tab.Sections, Section)
-    
-    -- Update section size
-    local function UpdateSize()
-        local totalHeight = 38 + 8  -- header + padding
-        for _, v in ipairs(elementsContainer:GetChildren()) do
-            if v:IsA("Frame") then
-                totalHeight = totalHeight + v.Size.Y.Offset + 6
-            end
-        end
-        section.Size = UDim2.new(1, 0, 0, totalHeight)
-    end
-    
-    Section.UpdateSize = UpdateSize
-    
-    return Section
-end
-
--- ============================
--- ELEMENT: BUTTON
--- ============================
-
-function ShadowField:CreateButton(window, section, btnConfig)
-    local theme = window.Theme
-    local elemTheme = theme.Element
-    
-    local btnFrame = self:Create("Frame", {
-        BackgroundColor3 = elemTheme.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 36),
-        Parent = section.ElementsContainer,
-    })
-    
-    local btnCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 6),
-        Parent = btnFrame,
-    })
-    
-    local button = self:Create("TextButton", {
-        BackgroundColor3 = Color3.fromRGB(30, 30, 40),
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 1, 0),
-        Font = Enum.Font.GothamSemibold,
-        Text = btnConfig.Name or "Button",
-        TextColor3 = elemTheme.TextColor,
-        TextSize = 14,
-        AutoButtonColor = false,
-        Parent = btnFrame,
-    })
-    
-    local btnInnerCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 6),
-        Parent = button,
-    })
-    
-    -- Info tooltip
-    if btnConfig.Info then
-        local infoIcon = self:Create("ImageLabel", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(0, 16, 0, 16),
-            Position = UDim2.new(1, -22, 0.5, -8),
-            Image = "rbxassetid://6031094678",
-            ImageColor3 = elemTheme.SubTextColor,
-            ImageTransparency = 0.5,
-            Parent = button,
-        })
-    end
-    
-    button.MouseEnter:Connect(function()
-        self:TweenObject(button, {
-            BackgroundColor3 = Color3.fromRGB(40, 40, 52),
-        }, TweenInfo.new(0.15))
-    end)
-    
-    button.MouseLeave:Connect(function()
-        self:TweenObject(button, {
-            BackgroundColor3 = Color3.fromRGB(30, 30, 40),
-        }, TweenInfo.new(0.15))
-    end)
-    
-    button.MouseButton1Click:Connect(function()
-        -- Click effect
-        self:TweenObject(button, {
-            BackgroundColor3 = elemTheme.AccentColor or theme.Window.AccentColor,
-        }, TweenInfo.new(0.1))
-        task.delay(0.1, function()
-            self:TweenObject(button, {
-                BackgroundColor3 = Color3.fromRGB(30, 30, 40),
-            }, TweenInfo.new(0.1))
-        end)
-        
-        if btnConfig.Callback then
-            pcall(btnConfig.Callback)
-        end
-    end)
-    
-    section.UpdateSize()
-    
-    return {
-        Button = button,
-        Frame = btnFrame,
-        SetText = function(self, text)
-            button.Text = text
-        end,
-        SetCallback = function(self, cb)
-            btnConfig.Callback = cb
-        end,
-        Destroy = function(self)
-            btnFrame:Destroy()
-            section.UpdateSize()
-        end,
-    }
-end
-
--- ============================
--- ELEMENT: TOGGLE
--- ============================
-
-function ShadowField:CreateToggle(window, section, toggleConfig)
-    local theme = window.Theme
-    local elemTheme = theme.Element
-    
-    local toggleState = false
-    
-    -- Load saved state
-    if window.SavedData and toggleConfig.Name then
-        local saved = window.SavedData[toggleConfig.Name]
-        if saved ~= nil then
-            toggleState = saved
-        end
-    end
-    
-    local toggleFrame = self:Create("Frame", {
-        BackgroundColor3 = elemTheme.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 36),
-        Parent = section.ElementsContainer,
-    })
-    
-    local toggleCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 6),
-        Parent = toggleFrame,
-    })
-    
-    -- Label
-    local label = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -60, 1, 0),
-        Position = UDim2.new(0, 12, 0, 0),
-        Font = Enum.Font.Gotham,
-        Text = toggleConfig.Name or "Toggle",
-        TextColor3 = elemTheme.TextColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = toggleFrame,
-    })
-    
-    -- Toggle background (the pill)
-    local toggleBg = self:Create("Frame", {
-        BackgroundColor3 = toggleState and elemTheme.ToggleOn or elemTheme.ToggleOff,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 42, 0, 22),
-        Position = UDim2.new(1, -52, 0.5, -11),
-        Parent = toggleFrame,
-    })
-    
-    local toggleBgCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 11),
-        Parent = toggleBg,
-    })
-    
-    -- Toggle knob
-    local toggleKnob = self:Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 18, 0, 18),
-        Position = UDim2.new(0, toggleState and 22 or 2, 0.5, -9),
-        Parent = toggleBg,
-    })
-    
-    local toggleKnobCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 9),
-        Parent = toggleKnob,
-    })
-    
-    -- Info tooltip
-    if toggleConfig.Info then
-        local infoIcon = self:Create("ImageLabel", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(0, 14, 0, 14),
-            Position = UDim2.new(0, label.TextBounds.X + 16, 0.5, -7),
-            Image = "rbxassetid://6031094678",
-            ImageColor3 = elemTheme.SubTextColor,
-            ImageTransparency = 0.5,
-            Parent = toggleFrame,
-        })
-    end
-    
-    local function SetToggleState(newState, triggerCallback)
-        toggleState = newState
-        
-        self:TweenObject(toggleBg, {
-            BackgroundColor3 = newState and elemTheme.ToggleOn or elemTheme.ToggleOff,
-        }, TweenInfo.new(0.2))
-        
-        self:TweenObject(toggleKnob, {
-            Position = UDim2.new(0, newState and 22 or 2, 0.5, -9),
-        }, TweenInfo.new(0.2))
-        
-        -- Save configuration
-        if toggleConfig.Name and window.ConfigSave.Enabled then
-            window.SavedData[toggleConfig.Name] = newState
-            ShadowField:SaveConfiguration(
-                window.ConfigSave.FolderName,
-                window.ConfigSave.FileName,
-                window.SavedData
-            )
-        end
-        
-        if triggerCallback ~= false and toggleConfig.Callback then
-            pcall(toggleConfig.Callback, newState)
-        end
-    end
-    
-    -- Click toggle
-    toggleFrame.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            SetToggleState(not toggleState, true)
-        end
-    end)
-    
-    -- Hover effect
-    toggleFrame.MouseEnter:Connect(function()
-        self:TweenObject(toggleFrame, {
-            BackgroundColor3 = elemTheme.HoverColor,
-        }, TweenInfo.new(0.15))
-    end)
-    toggleFrame.MouseLeave:Connect(function()
-        self:TweenObject(toggleFrame, {
-            BackgroundColor3 = elemTheme.BackgroundColor,
-        }, TweenInfo.new(0.15))
-    end)
-    
-    section.UpdateSize()
-    
-    -- Trigger initial callback if default is on
-    if toggleState and toggleConfig.Callback then
-        task.spawn(toggleConfig.Callback, true)
-    end
-    
-    return {
-        Frame = toggleFrame,
-        ToggleBg = toggleBg,
-        ToggleKnob = toggleKnob,
-        Label = label,
-        
-        Set = function(self, state, trigger)
-            SetToggleState(state, trigger)
-        end,
-        
-        Get = function(self)
-            return toggleState
-        end,
-        
-        SetCallback = function(self, cb)
-            toggleConfig.Callback = cb
-        end,
-        
-        Destroy = function(self)
-            toggleFrame:Destroy()
-            section.UpdateSize()
-        end,
-    }
-end
-
--- ============================
--- ELEMENT: SLIDER
--- ============================
-
-function ShadowField:CreateSlider(window, section, sliderConfig)
-    local theme = window.Theme
-    local elemTheme = theme.Element
-    
-    local min = sliderConfig.Min or 0
-    local max = sliderConfig.Max or 100
-    local decimals = sliderConfig.Decimals or 1
-    local defaultValue = sliderConfig.Default or min
-    
-    -- Load saved
-    if window.SavedData and sliderConfig.Name then
-        local saved = window.SavedData[sliderConfig.Name]
-        if saved ~= nil then
-            defaultValue = saved
-        end
-    end
-    
-    local currentValue = math.clamp(defaultValue, min, max)
-    
-    local sliderFrame = self:Create("Frame", {
-        BackgroundColor3 = elemTheme.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 50),
-        Parent = section.ElementsContainer,
-    })
-    
-    local sliderCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 6),
-        Parent = sliderFrame,
-    })
-    
-    -- Label
-    local label = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -60, 0, 20),
-        Position = UDim2.new(0, 12, 0, 6),
-        Font = Enum.Font.Gotham,
-        Text = sliderConfig.Name or "Slider",
-        TextColor3 = elemTheme.TextColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = sliderFrame,
-    })
-    
-    -- Value display
-    local valueLabel = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 50, 0, 20),
-        Position = UDim2.new(1, -55, 0, 6),
-        Font = Enum.Font.GothamSemibold,
-        Text = tostring(ShadowField:RoundNumber(currentValue, decimals)),
-        TextColor3 = theme.Window.AccentColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Right,
-        Parent = sliderFrame,
-    })
-    
-    -- Slider track
-    local sliderTrack = self:Create("Frame", {
-        BackgroundColor3 = elemTheme.SliderBackground,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -24, 0, 6),
-        Position = UDim2.new(0, 12, 0, 34),
-        Parent = sliderFrame,
-    })
-    
-    local trackCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 3),
-        Parent = sliderTrack,
-    })
-    
-    -- Slider fill
-    local sliderFill = self:Create("Frame", {
-        BackgroundColor3 = elemTheme.SliderFill,
-        BorderSizePixel = 0,
-        Size = UDim2.new((currentValue - min) / (max - min), 0, 1, 0),
-        Parent = sliderTrack,
-    })
-    
-    local fillCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 3),
-        Parent = sliderFill,
-    })
-    
-    -- Slider knob
-    local sliderKnob = self:Create("Frame", {
-        BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 14, 0, 14),
-        Position = UDim2.new((currentValue - min) / (max - min), -7, 0.5, -7),
-        Parent = sliderTrack,
-    })
-    
-    local knobCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 7),
-        Parent = sliderKnob,
-    })
-    
-    local dragging = false
-    
-    local function UpdateSlider(input)
-        local trackPos = sliderTrack.AbsolutePosition
-        local trackSize = sliderTrack.AbsoluteSize
-        local mouseX = input.Position.X
-        
-        local percent = (mouseX - trackPos.X) / trackSize.X
-        percent = math.clamp(percent, 0, 1)
-        
-        local newValue = min + (max - min) * percent
-        newValue = ShadowField:RoundNumber(newValue, decimals)
-        currentValue = math.clamp(newValue, min, max)
-        
-        -- Update UI
-        sliderFill.Size = UDim2.new((currentValue - min) / (max - min), 0, 1, 0)
-        sliderKnob.Position = UDim2.new((currentValue - min) / (max - min), -7, 0.5, -7)
-        valueLabel.Text = tostring(currentValue)
-        
-        -- Save
-        if sliderConfig.Name and window.ConfigSave.Enabled then
-            window.SavedData[sliderConfig.Name] = currentValue
-            ShadowField:SaveConfiguration(
-                window.ConfigSave.FolderName,
-                window.ConfigSave.FileName,
-                window.SavedData
-            )
-        end
-    end
-    
-    local function FinishSlider()
-        dragging = false
-        if sliderConfig.Callback then
-            pcall(sliderConfig.Callback, currentValue)
-        end
-    end
-    
-    sliderTrack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            UpdateSlider(input)
-        end
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            UpdateSlider(input)
-        end
-    end)
-    
-    UserInputService.InputEnded:Connect(function(input)
-        if dragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-            FinishSlider()
-        end
-    end)
-    
-    -- Hover
-    sliderFrame.MouseEnter:Connect(function()
-        self:TweenObject(sliderFrame, {
-            BackgroundColor3 = elemTheme.HoverColor,
-        }, TweenInfo.new(0.15))
-    end)
-    sliderFrame.MouseLeave:Connect(function()
-        self:TweenObject(sliderFrame, {
-            BackgroundColor3 = elemTheme.BackgroundColor,
-        }, TweenInfo.new(0.15))
-    end)
-    
-    section.UpdateSize()
-    
-    -- Fire initial callback
-    if sliderConfig.Callback then
-        task.spawn(sliderConfig.Callback, currentValue)
-    end
-    
-    return {
-        Frame = sliderFrame,
-        
-        Set = function(self, value)
-            currentValue = math.clamp(value, min, max)
-            sliderFill.Size = UDim2.new((currentValue - min) / (max - min), 0, 1, 0)
-            sliderKnob.Position = UDim2.new((currentValue - min) / (max - min), -7, 0.5, -7)
-            valueLabel.Text = tostring(currentValue)
-        end,
-        
-        Get = function(self)
-            return currentValue
-        end,
-        
-        SetCallback = function(self, cb)
-            sliderConfig.Callback = cb
-        end,
-        
-        Destroy = function(self)
-            sliderFrame:Destroy()
-            section.UpdateSize()
-        end,
-    }
-end
-
--- ============================
--- ELEMENT: DROPDOWN
--- ============================
-
-function ShadowField:CreateDropdown(window, section, dropdownConfig)
-    local theme = window.Theme
-    local elemTheme = theme.Element
-    local ddTheme = theme.Dropdown
-    
-    local options = dropdownConfig.Options or {}
-    local selectedOption = dropdownConfig.Default or (options[1] or "")
-    local isOpen = false
-    
-    -- Load saved
-    if window.SavedData and dropdownConfig.Name then
-        local saved = window.SavedData[dropdownConfig.Name]
-        if saved and table.find(options, saved) then
-            selectedOption = saved
-        end
-    end
-    
-    local dropdownFrame = self:Create("Frame", {
-        BackgroundColor3 = elemTheme.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 36),
-        Parent = section.ElementsContainer,
-    })
-    
-    local dropdownCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 6),
-        Parent = dropdownFrame,
-    })
-    
-    -- Label
-    local label = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -60, 1, 0),
-        Position = UDim2.new(0, 12, 0, 0),
-        Font = Enum.Font.Gotham,
-        Text = dropdownConfig.Name or "Dropdown",
-        TextColor3 = elemTheme.TextColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = dropdownFrame,
-    })
-    
-    -- Selected display
-    local selectedText = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 100, 1, 0),
-        Position = UDim2.new(1, -110, 0, 0),
-        Font = Enum.Font.Gotham,
-        Text = selectedOption,
-        TextColor3 = elemTheme.AccentColor or theme.Window.AccentColor,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Right,
-        Parent = dropdownFrame,
-    })
-    
-    -- Arrow
-    local arrow = self:Create("ImageLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(0, 12, 0, 12),
-        Position = UDim2.new(1, -16, 0.5, -6),
-        Image = "rbxassetid://6031094678",
-        ImageColor3 = elemTheme.SubTextColor,
-        Rotation = 0,
-        Parent = dropdownFrame,
-    })
-    
-    -- Dropdown container (for options)
-    local ddContainer = self:Create("Frame", {
-        BackgroundColor3 = ddTheme.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 0),
-        Position = UDim2.new(0, 0, 0, 36),
-        ClipsDescendants = true,
-        Visible = false,
-        ZIndex = 5,
-        Parent = dropdownFrame,
-    })
-    
-    local ddCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 6),
-        Parent = ddContainer,
-    })
-    
-    -- Options list
-    local optionsList = self:Create("ScrollingFrame", {
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -8, 1, -8),
-        Position = UDim2.new(0, 4, 0, 4),
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        ScrollBarThickness = 3,
-        ScrollBarImage
-        ScrollBarImageColor3 = Color3.fromRGB(40, 40, 50),
-    AutomaticCanvasSize = Enum.AutomaticSize.Y,
-    Parent = ddContainer,
-})
-
-local optionsLayout = self:Create("UIListLayout", {
-    Padding = UDim.new(0, 2),
-    SortOrder = Enum.SortOrder.LayoutOrder,
-    Parent = optionsList,
-})
-
--- Create option buttons
-local optionButtons = {}
-for _, opt in ipairs(options) do
-    local optBtn = self:Create("TextButton", {
-        BackgroundColor3 = (opt == selectedOption) and ddTheme.SelectedColor or ddTheme.ItemColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 28),
-        Font = Enum.Font.Gotham,
-        Text = opt,
-        TextColor3 = ddTheme.TextColor,
-        TextSize = 13,
-        TextXAlignment = Enum.TextXAlignment.Center,
-        AutoButtonColor = false,
-        Parent = optionsList,
-    })
-    
-    local optCorner = self:Create("UICorner", {
-        CornerRadius = UDim.new(0, 4),
-        Parent = optBtn,
-    })
-    
-    optBtn.MouseEnter:Connect(function()
-        if opt ~= selectedOption then
-            self:TweenObject(optBtn, {
-                BackgroundColor3 = ddTheme.HoverColor,
-            }, TweenInfo.new(0.1))
-        end
-    end)
-    optBtn.MouseLeave:Connect(function()
-        if opt ~= selectedOption then
-            self:TweenObject(optBtn, {
-                BackgroundColor3 = ddTheme.ItemColor,
-            }, TweenInfo.new(0.1))
-        end
-    end)
-    optBtn.MouseButton1Click:Connect(function()
-        selectedOption = opt
-        selectedText.Text = opt
-        
-        -- Update highlights
-        for _, btn in ipairs(optionButtons) do
-            self:TweenObject(btn, {
-                BackgroundColor3 = ddTheme.ItemColor,
-            }, TweenInfo.new(0.1))
-        end
-        self:TweenObject(optBtn, {
-            BackgroundColor3 = ddTheme.SelectedColor,
-        }, TweenInfo.new(0.1))
-        
-        -- Close dropdown
-        CloseDropdown()
-        
-        -- Save
-        if dropdownConfig.Name and window.ConfigSave.Enabled then
-            window.SavedData[dropdownConfig.Name] = opt
-            ShadowField:SaveConfiguration(
-                window.ConfigSave.FolderName,
-                window.ConfigSave.FileName,
-                window.SavedData
-            )
-        end
-        
-        if dropdownConfig.Callback then
-            pcall(dropdownConfig.Callback, opt)
-        end
-    end)
-    
-    table.insert(optionButtons, optBtn)
-end
-
-local function CloseDropdown()
-    if not isOpen then return end
-    isOpen = false
-    self:TweenObject(ddContainer, {
-        Size = UDim2.new(1, 0, 0, 0),
-    }, TweenInfo.new(0.2))
-    self:TweenObject(arrow, {
-        Rotation = 0,
-    }, TweenInfo.new(0.2))
-    task.delay(0.2, function()
-        ddContainer.Visible = false
-        dropdownFrame.Size = UDim2.new(1, 0, 0, 36)
-    end)
-end
-
-local function OpenDropdown()
-    if isOpen then return end
-    isOpen = true
-    local count = #options
-    local height = math.min(count * 30 + 8, 180)
-    dropdownFrame.Size = UDim2.new(1, 0, 0, 36 + height + 4)
-    ddContainer.Visible = true
-    ddContainer.Size = UDim2.new(1, 0, 0, 0)
-    self:TweenObject(ddContainer, {
-        Size = UDim2.new(1, 0, 0, height),
-    }, TweenInfo.new(0.25, Enum.EasingStyle.Quint))
-    self:TweenObject(arrow, {
-        Rotation = 180,
-    }, TweenInfo.new(0.2))
-end
-
--- Toggle dropdown when clicking
-dropdownFrame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        if isOpen then
-            CloseDropdown()
-        else
-            OpenDropdown()
-        end
-    end
-end)
-
--- Hover
-dropdownFrame.MouseEnter:Connect(function()
-    self:TweenObject(dropdownFrame, {BackgroundColor3 = elemTheme.HoverColor}, TweenInfo.new(0.15))
-end)
-dropdownFrame.MouseLeave:Connect(function()
-    self:TweenObject(dropdownFrame, {BackgroundColor3 = elemTheme.BackgroundColor}, TweenInfo.new(0.15))
-end)
-
-section.UpdateSize()
-
-return {
-    Frame = dropdownFrame,
-    Set = function(self, option)
-        if table.find(options, option) then
-            selectedOption = option
-            selectedText.Text = option
-            for _, btn in ipairs(optionButtons) do
-                self:TweenObject(btn, {BackgroundColor3 = (btn.Text == option) and ddTheme.SelectedColor or ddTheme.ItemColor}, TweenInfo.new(0.1))
-            end
-        end
-    end,
-    Get = function(self) return selectedOption end,
-    SetCallback = function(self, cb) dropdownConfig.Callback = cb end,
-    Destroy = function(self)
-        dropdownFrame:Destroy()
-        section.UpdateSize()
-    end,
-}
-end
-
--- ============================
--- ELEMENT: INPUT
--- ============================
-
-function ShadowField:CreateInput(window, section, inputConfig)
-    local theme = window.Theme
-    local elemTheme = theme.Element
-    
-    local placeholder = inputConfig.Placeholder or "Type here..."
-    local defaultValue = inputConfig.Default or ""
-    
-    -- Load saved
-    if window.SavedData and inputConfig.Name then
-        local saved = window.SavedData[inputConfig.Name]
-        if saved then defaultValue = saved end
-    end
-    
-    local inputFrame = self:Create("Frame", {
-        BackgroundColor3 = elemTheme.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 50),
-        Parent = section.ElementsContainer,
-    })
-    
-    local inputCorner = self:Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = inputFrame})
-    
-    local label = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -24, 0, 20),
-        Position = UDim2.new(0, 12, 0, 6),
-        Font = Enum.Font.Gotham,
-        Text = inputConfig.Name or "Input",
-        TextColor3 = elemTheme.TextColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = inputFrame,
-    })
-    
-    local textBox = self:Create("TextBox", {
-        BackgroundColor3 = elemTheme.InputBackground,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, -24, 0, 28),
-        Position = UDim2.new(0, 12, 0, 28),
-        Font = Enum.Font.Gotham,
-        PlaceholderText = placeholder,
-        Text = defaultValue,
-        TextColor3 = elemTheme.TextColor,
-        TextSize = 14,
-        PlaceholderColor3 = elemTheme.SubTextColor,
-        ClearTextOnFocus = false,
-        Parent = inputFrame,
-    })
-    
-    local boxCorner = self:Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = textBox})
-    
-    textBox.FocusLost:Connect(function(enterPressed)
-        if inputConfig.Callback then
-            pcall(inputConfig.Callback, textBox.Text)
-        end
-        if inputConfig.Name and window.ConfigSave.Enabled then
-            window.SavedData[inputConfig.Name] = textBox.Text
-            ShadowField:SaveConfiguration(window.ConfigSave.FolderName, window.ConfigSave.FileName, window.SavedData)
-        end
-    end)
-    
-    inputFrame.MouseEnter:Connect(function()
-        self:TweenObject(inputFrame, {BackgroundColor3 = elemTheme.HoverColor}, TweenInfo.new(0.15))
-    end)
-    inputFrame.MouseLeave:Connect(function()
-        self:TweenObject(inputFrame, {BackgroundColor3 = elemTheme.BackgroundColor}, TweenInfo.new(0.15))
-    end)
-    
-    section.UpdateSize()
-    
-    return {
-        Frame = inputFrame,
-        Set = function(self, text) textBox.Text = text end,
-        Get = function(self) return textBox.Text end,
-        SetCallback = function(self, cb) inputConfig.Callback = cb end,
-        Destroy = function(self) inputFrame:Destroy() section.UpdateSize() end,
-    }
-end
-
--- ============================
--- ELEMENT: KEYBIND
--- ============================
-
-function ShadowField:CreateKeybind(window, section, keybindConfig)
-    local theme = window.Theme
-    local elemTheme = theme.Element
-    local kbTheme = theme.Keybind
-    
-    local currentKey = keybindConfig.Default or Enum.KeyCode[window.UIKeybind] or Enum.KeyCode.K
-    local isListening = false
-    
-    -- Load saved
-    if window.SavedData and keybindConfig.Name then
-        local saved = window.SavedData[keybindConfig.Name]
-        if saved then
-            currentKey = Enum.KeyCode[saved] or currentKey
-        end
-    end
-    
-    local kbFrame = self:Create("Frame", {
-        BackgroundColor3 = elemTheme.BackgroundColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 36),
-        Parent = section.ElementsContainer,
-    })
-    
-    local kbCorner = self:Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = kbFrame})
-    
-    local label = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, -80, 1, 0),
-        Position = UDim2.new(0, 12, 0, 0),
-        Font = Enum.Font.Gotham,
-        Text = keybindConfig.Name or "Keybind",
-        TextColor3 = elemTheme.TextColor,
-        TextSize = 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = kbFrame,
-    })
-    
-    local keyButton = self:Create("TextButton", {
-        BackgroundColor3 = kbTheme.KeyColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(0, 60, 0, 26),
-        Position = UDim2.new(1, -68, 0.5, -13),
-        Font = Enum.Font.GothamSemibold,
-        Text = ShadowField:GetKeyName({KeyCode = currentKey}),
-        TextColor3 = kbTheme.TextColor,
-        TextSize = 13,
-        AutoButtonColor = false,
-        Parent = kbFrame,
-    })
-    
-    local keyCorner = self:Create("UICorner", {CornerRadius = UDim.new(0, 6), Parent = keyButton})
-    
-    keyButton.MouseButton1Click:Connect(function()
-        isListening = true
-        keyButton.Text = "..."
-        keyButton.BackgroundColor3 = theme.Window.AccentColor
-    end)
-    
-    local listenConnection
-    listenConnection = UserInputService.InputBegan:Connect(function(input, gpe)
-        if not isListening then return end
-        if gpe then return end
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            isListening = false
-            currentKey = input.KeyCode
-            keyButton.Text = ShadowField:GetKeyName({KeyCode = currentKey})
-            keyButton.BackgroundColor3 = kbTheme.KeyColor
-            
-            if keybindConfig.Name and window.ConfigSave.Enabled then
-                window.SavedData[keybindConfig.Name] = tostring(currentKey):gsub("Enum.KeyCode.", "")
-                ShadowField:SaveConfiguration(window.ConfigSave.FolderName, window.ConfigSave.FileName, window.SavedData)
-            end
-            
-            if keybindConfig.Callback then
-                pcall(keybindConfig.Callback, currentKey)
-            end
-        end
-    end)
-    
-    kbFrame.MouseEnter:Connect(function()
-        self:TweenObject(kbFrame, {BackgroundColor3 = elemTheme.HoverColor}, TweenInfo.new(0.15))
-    end)
-    kbFrame.MouseLeave:Connect(function()
-        self:TweenObject(kbFrame, {BackgroundColor3 = elemTheme.BackgroundColor}, TweenInfo.new(0.15))
-    end)
-    
-    section.UpdateSize()
-    
-    return {
-        Frame = kbFrame,
-        Set = function(self, key) 
-            currentKey = key
-            keyButton.Text = ShadowField:GetKeyName({KeyCode = key})
-        end,
-        Get = function(self) return currentKey end,
-        SetCallback = function(self, cb) keybindConfig.Callback = cb end,
-        Destroy = function(self) kbFrame:Destroy() listenConnection:Disconnect() section.UpdateSize() end,
-    }
-end
-
--- ============================
--- ELEMENT: LABEL
--- ============================
-
-function ShadowField:CreateLabel(window, section, labelConfig)
-    local theme = window.Theme
-    local elemTheme = theme.Element
-    
-    local labelFrame = self:Create("Frame", {
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 24),
-        Parent = section.ElementsContainer,
-    })
-    
-    local label = self:Create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 1, 0),
-        Font = Enum.Font.Gotham,
-        Text = labelConfig.Text or "Label",
-        TextColor3 = labelConfig.Color or elemTheme.TextColor,
-        TextSize = labelConfig.TextSize or 14,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = labelFrame,
-    })
-    
-    section.UpdateSize()
-    
-    return {
-        Frame = labelFrame,
-        Set = function(self, text) label.Text = text end,
-        SetColor = function(self, color) label.TextColor3 = color end,
-        Destroy = function(self) labelFrame:Destroy() section.UpdateSize() end,
-    }
-end
-
--- ============================
--- ELEMENT: SEPARATOR
--- ============================
-
-function ShadowField:CreateSeparator(window, section)
-    local theme = window.Theme
-    local elemTheme = theme.Element
-    
-    local sepFrame = self:Create("Frame", {
-        BackgroundTransparency = 1,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 16),
-        Parent = section.ElementsContainer,
-    })
-    
-    local line = self:Create("Frame", {
-        BackgroundColor3 = elemTheme.BorderColor,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 1),
-        Position = UDim2.new(0, 0, 0.5, 0),
-        Parent = sepFrame,
-    })
-    
-    section.UpdateSize()
-    
-    return {
-        Frame = sepFrame,
-        Destroy = function(self) sepFrame:Destroy() section.UpdateSize() end,
-    }
-end
-
--- ============================
--- LIBRARY INIT
--- ============================
-
-function ShadowField:Notify(notificationConfig)
-    -- Global notification function (needs an active window)
-    for _, win in ipairs(ActiveWindows) do
-        if win.ScreenGui and win.ScreenGui.Parent then
-            return ShadowField:ShowNotification(notificationConfig, win.ScreenGui)
-        end
-    end
-end
-
-function ShadowField:Destroy()
-    for _, win in ipairs(ActiveWindows) do
-        pcall(function() win.ScreenGui:Destroy() end)
-    end
-    for _, conn in ipairs(UIConnections) do
-        pcall(conn.Disconnect, conn)
-    end
-    ActiveWindows = {}
-    UIConnections = {}
-end
-
--- Export the library (call it like loadstring()())
-return ShadowField
+return Aquafield
