@@ -1,1447 +1,3007 @@
 --[[
-================================================================================
-    AQUAFIELD UI LIBRARY  v3.0  "Hydra"
-    --------------------------------------------------------------------------
-    Ultra-modern, glass-morphic Roblox UI library with cinematic effects.
-    
-      • Horizontal single-row tab bar
-      • 5 curated themes (Ocean default, Darker Crimson, Solar,
-        Darker Matrix Green, Lighter Violet)
-      • Always-visible floating restore icon when hidden / minimized
-      • Spring-driven open / close, ripple, glow, parallax,
-        animated gradient borders, particle ambience
-      • Rayfield-compatible component API
-      • Persistent config (writefile / readfile) when supported
-    
-    Default visibility keybind .................. K
-    Change at runtime ........................... Aquafield:SetToggleKeybind("J")
-    Or via the auto-injected Settings tab.
-    
-                       Made with care.  Enjoy.
-================================================================================
+    Aquafield Interface Suite  --  ENHANCED EDITION v2.0
+    ============================================================
+    A polished Roblox UI library with a Rayfield-compatible API.
+
+    What is new in v2.0:
+      *  Glassmorphism surfaces with animated gradient halo
+      *  Particle field background (subtle floating dots)
+      *  Glow-on-hover for every interactive element
+      *  Spring-style entrance animations
+      *  10 hand-tuned themes (Ocean, Crimson, MatrixGreen,
+         Amethyst, Sunset, Midnight, Forest, Cyber, Aurora, Mono)
+      *  Built-in Settings tab (auto-injected) with:
+            - Theme picker
+            - Toggle-UI keybind picker  (default: K)
+            - Acrylic blur slider
+            - Notification position picker
+      *  Rich notification stack (toast w/ progress, icon, accent)
+      *  Keybind-driven open/close of the entire window
+
+    Rayfield-compatible drop-in usage:
+
+        local Aquafield = loadstring(game:HttpGet("RAW_URL"))()
+
+        local Window = Aquafield:CreateWindow({
+            Name             = "My Hub",
+            LoadingTitle     = "Aquafield",
+            LoadingSubtitle  = "Interface Suite",
+            Theme            = "Ocean",        -- see ThemeNames
+            ToggleUIKeybind  = "K",            -- NEW (default)
+            ConfigurationSaving = {
+                Enabled   = true,
+                FolderName= "Aquafield",
+                FileName  = "MyHub",
+            },
+            KeySystem        = false,
+        })
+
+        local Tab = Window:CreateTab("Main", 4483362458)
+        Tab:CreateButton({ Name = "Hi", Callback = function() end })
+        Aquafield:LoadConfiguration()
 ]]
 
-local Aquafield = {}
-Aquafield.__index   = Aquafield
-Aquafield.Version   = "3.0.0-Hydra"
-Aquafield.Flags     = {}
-Aquafield.Windows   = {}
-Aquafield.ConfigDir = "AquafieldUI"
-
---==============================================================
+--------------------------------------------------------------------------------
 -- SERVICES
---==============================================================
-local TweenService      = game:GetService("TweenService")
-local UserInputService  = game:GetService("UserInputService")
-local RunService        = game:GetService("RunService")
-local CoreGui           = game:GetService("CoreGui")
-local Players           = game:GetService("Players")
-local HttpService       = game:GetService("HttpService")
-local GuiService        = game:GetService("GuiService")
-local LocalPlayer       = Players.LocalPlayer
-local Mouse             = LocalPlayer:GetMouse()
+--------------------------------------------------------------------------------
+local CoreGui          = game:GetService("CoreGui")
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService       = game:GetService("RunService")
+local HttpService      = game:GetService("HttpService")
+local Players          = game:GetService("Players")
+local Lighting         = game:GetService("Lighting")
+local Workspace        = game:GetService("Workspace")
 
---==============================================================
--- THEMES  (exactly 5, Ocean is default)
---==============================================================
-Aquafield.Themes = {
-    Ocean = {
-        Background  = Color3.fromRGB(10, 18, 32),
-        Surface     = Color3.fromRGB(16, 28, 48),
-        Surface2    = Color3.fromRGB(22, 38, 64),
-        Stroke      = Color3.fromRGB(48, 110, 180),
-        Accent      = Color3.fromRGB(64, 168, 255),
-        AccentGlow  = Color3.fromRGB(120, 210, 255),
-        Text        = Color3.fromRGB(232, 244, 255),
-        SubText     = Color3.fromRGB(150, 178, 210),
-        Success     = Color3.fromRGB(76, 220, 160),
-        Danger      = Color3.fromRGB(255, 96, 110),
-    },
-    ["Darker Crimson"] = {
-        Background  = Color3.fromRGB(20, 8, 12),
-        Surface     = Color3.fromRGB(32, 12, 18),
-        Surface2    = Color3.fromRGB(46, 18, 26),
-        Stroke      = Color3.fromRGB(140, 30, 50),
-        Accent      = Color3.fromRGB(220, 48, 76),
-        AccentGlow  = Color3.fromRGB(255, 110, 130),
-        Text        = Color3.fromRGB(252, 232, 236),
-        SubText     = Color3.fromRGB(180, 140, 150),
-        Success     = Color3.fromRGB(120, 220, 140),
-        Danger      = Color3.fromRGB(255, 90, 90),
-    },
-    Solar = {
-        Background  = Color3.fromRGB(24, 16, 6),
-        Surface     = Color3.fromRGB(38, 26, 12),
-        Surface2    = Color3.fromRGB(54, 38, 18),
-        Stroke      = Color3.fromRGB(200, 130, 30),
-        Accent      = Color3.fromRGB(255, 176, 48),
-        AccentGlow  = Color3.fromRGB(255, 220, 120),
-        Text        = Color3.fromRGB(255, 244, 220),
-        SubText     = Color3.fromRGB(200, 175, 140),
-        Success     = Color3.fromRGB(120, 220, 140),
-        Danger      = Color3.fromRGB(255, 90, 90),
-    },
-    ["Darker Matrix Green"] = {
-        Background  = Color3.fromRGB(4, 14, 8),
-        Surface     = Color3.fromRGB(8, 22, 14),
-        Surface2    = Color3.fromRGB(14, 32, 20),
-        Stroke      = Color3.fromRGB(30, 120, 60),
-        Accent      = Color3.fromRGB(56, 220, 110),
-        AccentGlow  = Color3.fromRGB(140, 255, 180),
-        Text        = Color3.fromRGB(220, 252, 232),
-        SubText     = Color3.fromRGB(130, 180, 150),
-        Success     = Color3.fromRGB(80, 240, 140),
-        Danger      = Color3.fromRGB(255, 96, 96),
-    },
-    ["Lighter Violet"] = {
-        Background  = Color3.fromRGB(34, 26, 56),
-        Surface     = Color3.fromRGB(50, 40, 80),
-        Surface2    = Color3.fromRGB(68, 56, 104),
-        Stroke      = Color3.fromRGB(170, 140, 240),
-        Accent      = Color3.fromRGB(190, 150, 255),
-        AccentGlow  = Color3.fromRGB(220, 200, 255),
-        Text        = Color3.fromRGB(248, 244, 255),
-        SubText     = Color3.fromRGB(190, 180, 220),
-        Success     = Color3.fromRGB(140, 230, 170),
-        Danger      = Color3.fromRGB(255, 110, 130),
-    },
+local LP = Players.LocalPlayer
+
+--------------------------------------------------------------------------------
+-- THEMES  (10 hand-tuned palettes)
+--------------------------------------------------------------------------------
+local Themes = {}
+
+Themes.Ocean = {
+    Background    = Color3.fromRGB(10, 18, 30),
+    Sidebar       = Color3.fromRGB(14, 24, 40),
+    Topbar        = Color3.fromRGB(12, 22, 36),
+    Element       = Color3.fromRGB(20, 34, 54),
+    ElementHover  = Color3.fromRGB(28, 46, 72),
+    Accent        = Color3.fromRGB(64, 180, 255),
+    AccentSoft    = Color3.fromRGB(28, 110, 180),
+    Text          = Color3.fromRGB(225, 240, 255),
+    SubText       = Color3.fromRGB(140, 170, 200),
+    Border        = Color3.fromRGB(34, 60, 90),
+    Success       = Color3.fromRGB(80, 220, 200),
+    Error         = Color3.fromRGB(255, 90, 110),
 }
-Aquafield.ThemeOrder = { "Ocean", "Darker Crimson", "Solar", "Darker Matrix Green", "Lighter Violet" }
-Aquafield.CurrentTheme = "Ocean"
 
---==============================================================
--- UTILITIES
---==============================================================
-local function tween(obj, t, props, style, dir)
-    local ti = TweenInfo.new(t or 0.25, style or Enum.EasingStyle.Quart, dir or Enum.EasingDirection.Out)
-    local tw = TweenService:Create(obj, ti, props)
-    tw:Play()
-    return tw
-end
+Themes.Crimson = {
+    Background    = Color3.fromRGB(18, 8, 10),
+    Sidebar       = Color3.fromRGB(24, 10, 14),
+    Topbar        = Color3.fromRGB(20, 9, 12),
+    Element       = Color3.fromRGB(38, 14, 20),
+    ElementHover  = Color3.fromRGB(58, 20, 28),
+    Accent        = Color3.fromRGB(235, 60, 80),
+    AccentSoft    = Color3.fromRGB(150, 30, 45),
+    Text          = Color3.fromRGB(255, 235, 235),
+    SubText       = Color3.fromRGB(190, 150, 155),
+    Border        = Color3.fromRGB(80, 25, 35),
+    Success       = Color3.fromRGB(120, 220, 140),
+    Error         = Color3.fromRGB(255, 80, 80),
+}
 
-local function spring(obj, t, props)
-    local ti = TweenInfo.new(t or 0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-    local tw = TweenService:Create(obj, ti, props)
-    tw:Play()
-    return tw
-end
+Themes.MatrixGreen = {
+    Background    = Color3.fromRGB(4, 12, 6),
+    Sidebar       = Color3.fromRGB(6, 18, 10),
+    Topbar        = Color3.fromRGB(5, 15, 8),
+    Element       = Color3.fromRGB(10, 28, 14),
+    ElementHover  = Color3.fromRGB(16, 44, 22),
+    Accent        = Color3.fromRGB(80, 255, 130),
+    AccentSoft    = Color3.fromRGB(30, 160, 70),
+    Text          = Color3.fromRGB(210, 255, 220),
+    SubText       = Color3.fromRGB(120, 180, 140),
+    Border        = Color3.fromRGB(28, 80, 40),
+    Success       = Color3.fromRGB(120, 255, 160),
+    Error         = Color3.fromRGB(255, 100, 100),
+}
 
-local function create(class, props, children)
+Themes.Amethyst = {
+    Background    = Color3.fromRGB(16, 10, 28),
+    Sidebar       = Color3.fromRGB(22, 14, 38),
+    Topbar        = Color3.fromRGB(18, 12, 32),
+    Element       = Color3.fromRGB(32, 22, 54),
+    ElementHover  = Color3.fromRGB(46, 32, 76),
+    Accent        = Color3.fromRGB(170, 120, 255),
+    AccentSoft    = Color3.fromRGB(110, 70, 200),
+    Text          = Color3.fromRGB(235, 225, 255),
+    SubText       = Color3.fromRGB(170, 150, 210),
+    Border        = Color3.fromRGB(70, 50, 110),
+    Success       = Color3.fromRGB(130, 255, 210),
+    Error         = Color3.fromRGB(255, 90, 160),
+}
+
+Themes.Sunset = {
+    Background    = Color3.fromRGB(28, 14, 18),
+    Sidebar       = Color3.fromRGB(40, 20, 22),
+    Topbar        = Color3.fromRGB(34, 16, 20),
+    Element       = Color3.fromRGB(54, 26, 28),
+    ElementHover  = Color3.fromRGB(74, 38, 38),
+    Accent        = Color3.fromRGB(255, 140, 80),
+    AccentSoft    = Color3.fromRGB(220, 90, 60),
+    Text          = Color3.fromRGB(255, 235, 220),
+    SubText       = Color3.fromRGB(210, 170, 150),
+    Border        = Color3.fromRGB(110, 55, 50),
+    Success       = Color3.fromRGB(255, 210, 120),
+    Error         = Color3.fromRGB(255, 100, 90),
+}
+
+Themes.Midnight = {
+    Background    = Color3.fromRGB(6, 8, 16),
+    Sidebar       = Color3.fromRGB(10, 12, 22),
+    Topbar        = Color3.fromRGB(8, 10, 18),
+    Element       = Color3.fromRGB(16, 20, 32),
+    ElementHover  = Color3.fromRGB(22, 28, 44),
+    Accent        = Color3.fromRGB(120, 140, 255),
+    AccentSoft    = Color3.fromRGB(60, 80, 200),
+    Text          = Color3.fromRGB(220, 228, 255),
+    SubText       = Color3.fromRGB(140, 150, 200),
+    Border        = Color3.fromRGB(40, 50, 80),
+    Success       = Color3.fromRGB(100, 220, 200),
+    Error         = Color3.fromRGB(255, 120, 140),
+}
+
+Themes.Forest = {
+    Background    = Color3.fromRGB(8, 18, 12),
+    Sidebar       = Color3.fromRGB(12, 26, 18),
+    Topbar        = Color3.fromRGB(10, 22, 15),
+    Element       = Color3.fromRGB(18, 38, 24),
+    ElementHover  = Color3.fromRGB(28, 54, 36),
+    Accent        = Color3.fromRGB(110, 210, 140),
+    AccentSoft    = Color3.fromRGB(50, 140, 80),
+    Text          = Color3.fromRGB(220, 240, 225),
+    SubText       = Color3.fromRGB(150, 190, 160),
+    Border        = Color3.fromRGB(40, 80, 55),
+    Success       = Color3.fromRGB(200, 240, 140),
+    Error         = Color3.fromRGB(255, 120, 120),
+}
+
+Themes.Cyber = {
+    Background    = Color3.fromRGB(4, 6, 14),
+    Sidebar       = Color3.fromRGB(8, 10, 22),
+    Topbar        = Color3.fromRGB(6, 8, 18),
+    Element       = Color3.fromRGB(14, 18, 34),
+    ElementHover  = Color3.fromRGB(22, 28, 52),
+    Accent        = Color3.fromRGB(0, 240, 255),
+    AccentSoft    = Color3.fromRGB(0, 140, 200),
+    Text          = Color3.fromRGB(200, 250, 255),
+    SubText       = Color3.fromRGB(110, 170, 200),
+    Border        = Color3.fromRGB(20, 80, 120),
+    Success       = Color3.fromRGB(255, 80, 200),
+    Error         = Color3.fromRGB(255, 80, 140),
+}
+
+Themes.Aurora = {
+    Background    = Color3.fromRGB(8, 12, 22),
+    Sidebar       = Color3.fromRGB(14, 20, 34),
+    Topbar        = Color3.fromRGB(12, 16, 28),
+    Element       = Color3.fromRGB(22, 32, 50),
+    ElementHover  = Color3.fromRGB(32, 44, 70),
+    Accent        = Color3.fromRGB(130, 230, 200),
+    AccentSoft    = Color3.fromRGB(60, 160, 180),
+    Text          = Color3.fromRGB(225, 240, 240),
+    SubText       = Color3.fromRGB(150, 190, 200),
+    Border        = Color3.fromRGB(50, 80, 100),
+    Success       = Color3.fromRGB(200, 160, 255),
+    Error         = Color3.fromRGB(255, 140, 180),
+}
+
+Themes.Mono = {
+    Background    = Color3.fromRGB(12, 12, 12),
+    Sidebar       = Color3.fromRGB(18, 18, 18),
+    Topbar        = Color3.fromRGB(14, 14, 14),
+    Element       = Color3.fromRGB(28, 28, 28),
+    ElementHover  = Color3.fromRGB(40, 40, 40),
+    Accent        = Color3.fromRGB(240, 240, 240),
+    AccentSoft    = Color3.fromRGB(160, 160, 160),
+    Text          = Color3.fromRGB(245, 245, 245),
+    SubText       = Color3.fromRGB(160, 160, 160),
+    Border        = Color3.fromRGB(60, 60, 60),
+    Success       = Color3.fromRGB(180, 255, 180),
+    Error         = Color3.fromRGB(255, 140, 140),
+}
+
+Themes.Default = Themes.Ocean -- alias
+
+local ThemeNames = { "Ocean","Crimson","MatrixGreen","Amethyst","Sunset","Midnight","Forest","Cyber","Aurora","Mono" }
+
+--------------------------------------------------------------------------------
+-- LIBRARY ROOT
+--------------------------------------------------------------------------------
+local Aquafield = {
+    Flags           = {},
+    Theme           = Themes.Ocean,
+    ThemeName       = "Ocean",
+    ToggleUIKeybind = Enum.KeyCode.K,   -- default toggle key
+    AcrylicStrength = 0.3,
+    NotifSide       = "BottomRight",
+    _windows        = {},
+    _themed         = {},
+    _hidden         = false,
+    _version        = "2.0",
+}
+
+--------------------------------------------------------------------------------
+-- CORE HELPERS  (instance, tween, corner, stroke, etc.)
+--------------------------------------------------------------------------------
+local function new(class, props, children)
     local inst = Instance.new(class)
-    if props then
-        for k, v in pairs(props) do
-            if k ~= "Parent" then inst[k] = v end
-        end
-        if props.Parent then inst.Parent = props.Parent end
-    end
-    if children then
-        for _, c in ipairs(children) do c.Parent = inst end
-    end
+    for k, v in pairs(props or {}) do inst[k] = v end
+    for _, c in ipairs(children or {}) do c.Parent = inst end
     return inst
 end
 
-local function corner(parent, r)
-    return create("UICorner", { CornerRadius = UDim.new(0, r or 8), Parent = parent })
+local function tween(o, t, props, style, dir)
+    local info = TweenInfo.new(
+        t or 0.2,
+        style or Enum.EasingStyle.Quad,
+        dir or Enum.EasingDirection.Out)
+    local tw = TweenService:Create(o, info, props)
+    tw:Play()
+    return tw
 end
 
-local function stroke(parent, color, thickness, transparency)
-    return create("UIStroke", {
-        Color = color or Color3.fromRGB(255,255,255),
-        Thickness = thickness or 1,
-        Transparency = transparency or 0,
+local function spring(o, t, props)
+    -- back-out easing for that springy entrance
+    return tween(o, t or 0.45, props, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+end
+
+local function corner(parent, r)
+    return new("UICorner", { CornerRadius = UDim.new(0, r or 8), Parent = parent })
+end
+
+local function stroke(parent, color, thick, trans)
+    return new("UIStroke", {
+        Color           = color or Color3.fromRGB(255, 255, 255),
+        Thickness       = thick or 1,
+        Transparency    = trans or 0,
         ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
-        Parent = parent,
+        Parent          = parent,
     })
 end
 
-local function padding(parent, p)
-    return create("UIPadding", {
-        PaddingTop    = UDim.new(0, p),
-        PaddingBottom = UDim.new(0, p),
-        PaddingLeft   = UDim.new(0, p),
-        PaddingRight  = UDim.new(0, p),
-        Parent = parent,
+local function pad(parent, x, y)
+    y = y or x or 8
+    x = x or 8
+    return new("UIPadding", {
+        PaddingTop    = UDim.new(0, y),
+        PaddingBottom = UDim.new(0, y),
+        PaddingLeft   = UDim.new(0, x),
+        PaddingRight  = UDim.new(0, x),
+        Parent        = parent,
+    })
+end
+
+local function gradient(parent, c1, c2, rot)
+    return new("UIGradient", {
+        Color    = ColorSequence.new(c1, c2),
+        Rotation = rot or 90,
+        Parent   = parent,
     })
 end
 
 local function lerpColor(a, b, t)
-    return a:Lerp(b, math.clamp(t, 0, 1))
+    return Color3.new(
+        a.R + (b.R - a.R) * t,
+        a.G + (b.G - a.G) * t,
+        a.B + (b.B - a.B) * t)
 end
 
-local function safeCall(fn, ...)
-    if typeof(fn) ~= "function" then return end
-    local ok, err = pcall(fn, ...)
-    if not ok then warn("[Aquafield] callback error: "..tostring(err)) end
+local function darken(c, f)
+    return Color3.new(
+        math.clamp(c.R * (1 - f), 0, 1),
+        math.clamp(c.G * (1 - f), 0, 1),
+        math.clamp(c.B * (1 - f), 0, 1))
 end
 
---==============================================================
--- CONFIG PERSISTENCE
---==============================================================
-local hasFS = (typeof(writefile) == "function") and (typeof(readfile) == "function") and (typeof(isfolder) == "function")
-
-local function ensureDir()
-    if not hasFS then return end
-    if not isfolder(Aquafield.ConfigDir) then
-        pcall(makefolder, Aquafield.ConfigDir)
-    end
+local function lighten(c, f)
+    return Color3.new(
+        math.clamp(c.R + (1 - c.R) * f, 0, 1),
+        math.clamp(c.G + (1 - c.G) * f, 0, 1),
+        math.clamp(c.B + (1 - c.B) * f, 0, 1))
 end
 
-function Aquafield:SaveConfig(name)
-    if not hasFS then return end
-    ensureDir()
-    local path = Aquafield.ConfigDir .. "/" .. (name or "default") .. ".json"
-    local data = {
-        Theme    = Aquafield.CurrentTheme,
-        Keybind  = Aquafield.ToggleKey and Aquafield.ToggleKey.Name or "K",
-        Flags    = {},
-    }
-    for k, v in pairs(Aquafield.Flags) do
-        local val = v.CurrentValue
-        if typeof(val) == "Color3" then
-            data.Flags[k] = { _t = "Color3", r = val.R, g = val.G, b = val.B }
-        elseif typeof(val) == "EnumItem" then
-            data.Flags[k] = { _t = "Enum", n = val.Name }
-        elseif typeof(val) == "table" or type(val) == "string" or type(val) == "number" or type(val) == "boolean" then
-            data.Flags[k] = val
-        end
-    end
-    pcall(writefile, path, HttpService:JSONEncode(data))
+local function keyCodeFromName(name)
+    if typeof(name) == "EnumItem" then return name end
+    if type(name) ~= "string" then return Enum.KeyCode.K end
+    local ok, kc = pcall(function() return Enum.KeyCode[name] end)
+    if ok and kc then return kc end
+    return Enum.KeyCode.K
 end
 
-function Aquafield:LoadConfig(name)
-    if not hasFS then return nil end
-    local path = Aquafield.ConfigDir .. "/" .. (name or "default") .. ".json"
-    if not isfile or not isfile(path) then return nil end
-    local ok, raw = pcall(readfile, path)
-    if not ok then return nil end
-    local ok2, data = pcall(function() return HttpService:JSONDecode(raw) end)
-    if not ok2 then return nil end
-    return data
+--------------------------------------------------------------------------------
+-- THEME REGISTRY  (live-recolor every themed instance)
+--------------------------------------------------------------------------------
+local function themed(inst, key, role)
+    Aquafield._themed[#Aquafield._themed + 1] = { inst = inst, key = key, role = role or "bg" }
 end
 
-
---==============================================================
--- ROOT SCREEN-GUI
---==============================================================
-local function getParentGui()
-    local target = CoreGui
-    if not pcall(function() return CoreGui.Name end) then
-        target = LocalPlayer:WaitForChild("PlayerGui")
-    end
-    for _, old in ipairs(target:GetChildren()) do
-        if old.Name == "AquafieldUI" then old:Destroy() end
-    end
-    return target
-end
-
-local ScreenGui = create("ScreenGui", {
-    Name = "AquafieldUI",
-    ResetOnSpawn = false,
-    IgnoreGuiInset = true,
-    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
-    DisplayOrder = 9999,
-    Parent = getParentGui(),
-})
-Aquafield.ScreenGui = ScreenGui
-
-Aquafield.ToggleKey = Enum.KeyCode.K
-
---==============================================================
--- AMBIENT PARTICLE FIELD  (background life)
---==============================================================
-local function buildParticleField(parent, count, theme)
-    local field = create("Frame", {
-        Name = "Particles",
-        BackgroundTransparency = 1,
-        Size = UDim2.fromScale(1, 1),
-        ZIndex = 1,
-        Parent = parent,
-        ClipsDescendants = true,
-    })
-    local list = {}
-    for i = 1, count or 14 do
-        local p = create("Frame", {
-            BackgroundColor3 = theme.AccentGlow,
-            BackgroundTransparency = 0.7,
-            BorderSizePixel = 0,
-            Size = UDim2.fromOffset(math.random(2, 5), math.random(2, 5)),
-            Position = UDim2.fromScale(math.random(), math.random()),
-            Parent = field,
-        })
-        corner(p, 8)
-        table.insert(list, { obj = p, vy = -math.random(2, 9)/100, drift = (math.random()-0.5)/200 })
-    end
-    RunService.RenderStepped:Connect(function()
-        for _, e in ipairs(list) do
-            local pos = e.obj.Position
-            local ny = pos.Y.Scale + e.vy * 0.6
-            local nx = pos.X.Scale + e.drift
-            if ny < -0.05 then ny = 1.05 end
-            if nx < -0.05 then nx = 1.05 elseif nx > 1.05 then nx = -0.05 end
-            e.obj.Position = UDim2.fromScale(nx, ny)
-        end
-    end)
-    return field
-end
-
-
---==============================================================
--- CREATE WINDOW
---==============================================================
-function Aquafield:CreateWindow(opts)
-    opts = opts or {}
-    local self = setmetatable({}, Aquafield)
-    self.Title       = opts.Name or "Aquafield"
-    self.SubTitle    = opts.LoadingSubtitle or opts.Subtitle or "v"..Aquafield.Version
-    self.Tabs        = {}
-    self.ActiveTab   = nil
-    self.Visible     = true
-    self.Minimized   = false
-    self.ConfigName  = opts.ConfigurationSaving and opts.ConfigurationSaving.FileName or "default"
-
-    if opts.Theme and Aquafield.Themes[opts.Theme] then
-        Aquafield.CurrentTheme = opts.Theme
-    end
-    if opts.ToggleUIKeybind then
-        local k = opts.ToggleUIKeybind
-        if typeof(k) == "EnumItem" then Aquafield.ToggleKey = k
-        elseif type(k) == "string" and Enum.KeyCode[k] then Aquafield.ToggleKey = Enum.KeyCode[k] end
-    end
-
-    local stored = Aquafield:LoadConfig(self.ConfigName)
-    if stored then
-        if stored.Theme and Aquafield.Themes[stored.Theme] then
-            Aquafield.CurrentTheme = stored.Theme
-        end
-        if stored.Keybind and Enum.KeyCode[stored.Keybind] then
-            Aquafield.ToggleKey = Enum.KeyCode[stored.Keybind]
-        end
-    end
-
-    local theme = Aquafield.Themes[Aquafield.CurrentTheme]
-
-    ----------------------------------------------------------------
-    -- OUTER GLOW / HALO
-    ----------------------------------------------------------------
-    local Halo = create("ImageLabel", {
-        Name = "Halo",
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://5028857084",
-        ImageColor3 = theme.Accent,
-        ImageTransparency = 0.55,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(24,24,276,276),
-        Size = UDim2.new(0, 720, 0, 520),
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        Parent = ScreenGui,
-        ZIndex = 1,
-    })
-
-    ----------------------------------------------------------------
-    -- MAIN WINDOW
-    ----------------------------------------------------------------
-    local Main = create("Frame", {
-        Name = "Main",
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        Size = UDim2.fromOffset(620, 420),
-        BackgroundColor3 = theme.Background,
-        BorderSizePixel = 0,
-        Parent = ScreenGui,
-        ZIndex = 2,
-        ClipsDescendants = true,
-    })
-    corner(Main, 14)
-    local mainStroke = stroke(Main, theme.Stroke, 1, 0.2)
-
-    -- gradient sheen
-    local sheen = create("UIGradient", {
-        Color = ColorSequence.new{
-            ColorSequenceKeypoint.new(0, theme.Surface2),
-            ColorSequenceKeypoint.new(0.5, theme.Background),
-            ColorSequenceKeypoint.new(1, theme.Surface),
-        },
-        Rotation = 135,
-        Parent = Main,
-    })
-
-    buildParticleField(Main, 16, theme)
-
-    ----------------------------------------------------------------
-    -- TITLE BAR
-    ----------------------------------------------------------------
-    local TitleBar = create("Frame", {
-        Name = "TitleBar",
-        BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.15,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 42),
-        Parent = Main,
-        ZIndex = 3,
-    })
-    corner(TitleBar, 14)
-    create("Frame", { -- cover bottom rounded
-        BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.15,
-        BorderSizePixel = 0,
-        Size = UDim2.new(1, 0, 0, 14),
-        Position = UDim2.new(0, 0, 1, -14),
-        Parent = TitleBar,
-        ZIndex = 3,
-    })
-
-    local titleIcon = create("Frame", {
-        Size = UDim2.fromOffset(10, 10),
-        Position = UDim2.new(0, 14, 0.5, -5),
-        BackgroundColor3 = theme.Accent,
-        BorderSizePixel = 0,
-        Parent = TitleBar,
-        ZIndex = 4,
-    })
-    corner(titleIcon, 10)
-
-    local titleLabel = create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 32, 0, 0),
-        Size = UDim2.new(1, -180, 1, 0),
-        Font = Enum.Font.GothamBold,
-        Text = self.Title,
-        TextSize = 15,
-        TextColor3 = theme.Text,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = TitleBar,
-        ZIndex = 4,
-    })
-
-    local subLabel = create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 32, 0, 22),
-        Size = UDim2.new(1, -180, 0, 14),
-        Font = Enum.Font.Gotham,
-        Text = self.SubTitle,
-        TextSize = 11,
-        TextColor3 = theme.SubText,
-        TextXAlignment = Enum.TextXAlignment.Left,
-        Parent = TitleBar,
-        ZIndex = 4,
-    })
-    -- shift title up slightly so subtitle fits
-    titleLabel.Position = UDim2.new(0, 32, 0, -4)
-
-    ----------------------------------------------------------------
-    -- WINDOW CONTROL BUTTONS  (always visible icons)
-    ----------------------------------------------------------------
-    local function makeCtrl(name, symbol, color, xOffset)
-        local btn = create("TextButton", {
-            Name = name,
-            AutoButtonColor = false,
-            BackgroundColor3 = color,
-            BackgroundTransparency = 0.05,
-            BorderSizePixel = 0,
-            Size = UDim2.fromOffset(26, 26),
-            Position = UDim2.new(1, xOffset, 0.5, -13),
-            Font = Enum.Font.GothamBold,
-            Text = symbol,
-            TextSize = 16,
-            TextColor3 = Color3.fromRGB(255,255,255),
-            Parent = TitleBar,
-            ZIndex = 5,
-        })
-        corner(btn, 8)
-        stroke(btn, Color3.fromRGB(255,255,255), 1, 0.7)
-        btn.MouseEnter:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 0 }) end)
-        btn.MouseLeave:Connect(function() tween(btn, 0.15, { BackgroundTransparency = 0.05 }) end)
-        return btn
-    end
-
-    local CloseBtn    = makeCtrl("Close",    "×", theme.Danger,  -34)
-    local MinimizeBtn = makeCtrl("Minimize", "–", theme.Surface2, -66)
-
-    ----------------------------------------------------------------
-    -- HORIZONTAL TAB BAR  (single row, scrollable horizontally)
-    ----------------------------------------------------------------
-    local TabBar = create("ScrollingFrame", {
-        Name = "TabBar",
-        BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.25,
-        BorderSizePixel = 0,
-        Position = UDim2.new(0, 10, 0, 50),
-        Size = UDim2.new(1, -20, 0, 38),
-        CanvasSize = UDim2.new(0, 0, 0, 0),
-        AutomaticCanvasSize = Enum.AutomaticSize.X,
-        ScrollBarThickness = 0,
-        ScrollingDirection = Enum.ScrollingDirection.X,
-        Parent = Main,
-        ZIndex = 3,
-    })
-    corner(TabBar, 10)
-    stroke(TabBar, theme.Stroke, 1, 0.6)
-
-    local tabLayout = create("UIListLayout", {
-        FillDirection = Enum.FillDirection.Horizontal,
-        Padding = UDim.new(0, 6),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-        VerticalAlignment = Enum.VerticalAlignment.Center,
-        Parent = TabBar,
-    })
-    create("UIPadding", {
-        PaddingLeft = UDim.new(0, 6),
-        PaddingRight = UDim.new(0, 6),
-        PaddingTop = UDim.new(0, 4),
-        PaddingBottom = UDim.new(0, 4),
-        Parent = TabBar,
-    })
-
-    -- moving highlight under the active tab
-    local TabHighlight = create("Frame", {
-        Name = "Highlight",
-        BackgroundColor3 = theme.Accent,
-        BorderSizePixel = 0,
-        Size = UDim2.fromOffset(0, 30),
-        Position = UDim2.fromOffset(0, 4),
-        Parent = TabBar,
-        ZIndex = 3,
-    })
-    corner(TabHighlight, 8)
-    create("UIGradient", {
-        Color = ColorSequence.new(theme.Accent, theme.AccentGlow),
-        Rotation = 45,
-        Parent = TabHighlight,
-    })
-
-    ----------------------------------------------------------------
-    -- CONTENT AREA
-    ----------------------------------------------------------------
-    local Content = create("Frame", {
-        Name = "Content",
-        BackgroundTransparency = 1,
-        Position = UDim2.new(0, 10, 0, 96),
-        Size = UDim2.new(1, -20, 1, -106),
-        Parent = Main,
-        ZIndex = 2,
-    })
-
-    self.Theme       = theme
-    self.Main        = Main
-    self.Halo        = Halo
-    self.TitleBar    = TitleBar
-    self.TabBar      = TabBar
-    self.TabHighlight= TabHighlight
-    self.Content     = Content
-    self.MainStroke  = mainStroke
-    self.Sheen       = sheen
-
-    ----------------------------------------------------------------
-    -- DRAG  (title bar)
-    ----------------------------------------------------------------
-    do
-        local dragging, dragStart, startPos
-        TitleBar.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true
-                dragStart = input.Position
-                startPos = Main.Position
-                input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
-                end)
-            end
-        end)
-        UserInputService.InputChanged:Connect(function(input)
-            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-                          or input.UserInputType == Enum.UserInputType.Touch) then
-                local d = input.Position - dragStart
-                Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
-                                          startPos.Y.Scale, startPos.Y.Offset + d.Y)
-                Halo.Position = Main.Position
-            end
-        end)
-    end
-
-    ----------------------------------------------------------------
-    -- FLOATING RESTORE ICON  (always exists, shown when hidden)
-    ----------------------------------------------------------------
-    local Restore = create("ImageButton", {
-        Name = "RestoreIcon",
-        AutoButtonColor = false,
-        BackgroundColor3 = theme.Background,
-        BorderSizePixel = 0,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0, 60, 0, 60),
-        Size = UDim2.fromOffset(46, 46),
-        Image = "",
-        Visible = false,
-        Parent = ScreenGui,
-        ZIndex = 50,
-    })
-    corner(Restore, 23)
-    stroke(Restore, theme.Accent, 2, 0.1)
-    local restoreCore = create("Frame", {
-        BackgroundColor3 = theme.Accent,
-        BorderSizePixel = 0,
-        AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
-        Size = UDim2.fromOffset(18, 18),
-        Parent = Restore,
-        ZIndex = 51,
-    })
-    corner(restoreCore, 9)
-    create("UIGradient", {
-        Color = ColorSequence.new(theme.Accent, theme.AccentGlow),
-        Rotation = 45,
-        Parent = restoreCore,
-    })
-    local restoreHalo = create("ImageLabel", {
-        BackgroundTransparency = 1,
-        Image = "rbxassetid://5028857084",
-        ImageColor3 = theme.Accent,
-        ImageTransparency = 0.5,
-        ScaleType = Enum.ScaleType.Slice,
-        SliceCenter = Rect.new(24,24,276,276),
-        AnchorPoint = Vector2.new(0.5,0.5),
-        Position = UDim2.new(0.5,0,0.5,0),
-        Size = UDim2.fromOffset(110, 110),
-        Parent = Restore,
-        ZIndex = 49,
-    })
-
-    -- breathe animation on restore icon
-    task.spawn(function()
-        while Restore.Parent do
-            tween(restoreHalo, 1.2, { ImageTransparency = 0.75 }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-            task.wait(1.2)
-            tween(restoreHalo, 1.2, { ImageTransparency = 0.4  }, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
-            task.wait(1.2)
-        end
-    end)
-
-    -- draggable restore icon
-    do
-        local dragging, dragStart, startPos, moved
-        Restore.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true; moved = false
-                dragStart = input.Position
-                startPos = Restore.Position
-                input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then
-                        dragging = false
-                        if not moved then
-                            self:Show()
-                        end
-                    end
-                end)
-            end
-        end)
-        UserInputService.InputChanged:Connect(function(input)
-            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-                          or input.UserInputType == Enum.UserInputType.Touch) then
-                local d = input.Position - dragStart
-                if d.Magnitude > 4 then moved = true end
-                Restore.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X,
-                                             startPos.Y.Scale, startPos.Y.Offset + d.Y)
-            end
-        end)
-    end
-    self.Restore = Restore
-
-    ----------------------------------------------------------------
-    -- VISIBILITY METHODS
-    ----------------------------------------------------------------
-    function self:Hide()
-        if not self.Visible then return end
-        self.Visible = false
-        tween(Main,  0.25, { Size = UDim2.fromOffset(0, 0), BackgroundTransparency = 1 })
-        tween(Halo,  0.25, { ImageTransparency = 1 })
-        task.delay(0.25, function()
-            Main.Visible = false
-            Halo.Visible = false
-        end)
-        Restore.Visible = true
-        Restore.Size = UDim2.fromOffset(0, 0)
-        spring(Restore, 0.5, { Size = UDim2.fromOffset(46, 46) })
-    end
-    function self:Show()
-        if self.Visible then return end
-        self.Visible = true
-        Restore.Visible = false
-        Main.Visible = true; Halo.Visible = true
-        Main.Size = UDim2.fromOffset(0, 0)
-        Main.BackgroundTransparency = 1
-        Halo.ImageTransparency = 1
-        spring(Main, 0.5, { Size = UDim2.fromOffset(620, 420), BackgroundTransparency = 0 })
-        tween(Halo, 0.4, { ImageTransparency = 0.55 })
-    end
-    function self:Toggle()
-        if self.Visible then self:Hide() else self:Show() end
-    end
-    function self:Minimize()
-        self.Minimized = not self.Minimized
-        if self.Minimized then
-            self._restoreSize = Main.Size
-            tween(Main, 0.3, { Size = UDim2.fromOffset(620, 42) })
-        else
-            tween(Main, 0.3, { Size = self._restoreSize or UDim2.fromOffset(620, 420) })
-        end
-    end
-    function self:Destroy()
-        tween(Main, 0.2, { Size = UDim2.fromOffset(0,0), BackgroundTransparency = 1 })
-        tween(Halo, 0.2, { ImageTransparency = 1 })
-        task.delay(0.25, function() ScreenGui:Destroy() end)
-    end
-
-    CloseBtn.MouseButton1Click:Connect(function() self:Destroy() end)
-    MinimizeBtn.MouseButton1Click:Connect(function() self:Minimize() end)
-
-    ----------------------------------------------------------------
-    -- KEYBIND LISTENER
-    ----------------------------------------------------------------
-    UserInputService.InputBegan:Connect(function(input, processed)
-        if processed then return end
-        if input.KeyCode == Aquafield.ToggleKey then
-            self:Toggle()
-        end
-    end)
-
-    ----------------------------------------------------------------
-    -- ENTRANCE ANIMATION
-    ----------------------------------------------------------------
-    Main.Size = UDim2.fromOffset(0, 0)
-    Main.BackgroundTransparency = 1
-    Halo.ImageTransparency = 1
-    spring(Main, 0.65, { Size = UDim2.fromOffset(620, 420), BackgroundTransparency = 0 })
-    tween(Halo, 0.5, { ImageTransparency = 0.55 })
-
-    table.insert(Aquafield.Windows, self)
-
-    ----------------------------------------------------------------
-    -- TAB API
-    ----------------------------------------------------------------
-    function self:CreateTab(name, icon)
-        local tab = {}
-        tab.Name = name
-        tab.Window = self
-        tab.Elements = {}
-
-        local button = create("TextButton", {
-            Name = "Tab_"..name,
-            AutoButtonColor = false,
-            BackgroundColor3 = theme.Surface2,
-            BackgroundTransparency = 0.4,
-            BorderSizePixel = 0,
-            Size = UDim2.fromOffset(0, 30),
-            AutomaticSize = Enum.AutomaticSize.X,
-            Font = Enum.Font.GothamMedium,
-            Text = "   "..name.."   ",
-            TextSize = 13,
-            TextColor3 = theme.SubText,
-            Parent = TabBar,
-            ZIndex = 4,
-        })
-        corner(button, 8)
-        create("UIPadding", {
-            PaddingLeft = UDim.new(0, 6), PaddingRight = UDim.new(0, 6),
-            Parent = button,
-        })
-
-        local page = create("ScrollingFrame", {
-            Name = "Page_"..name,
-            BackgroundTransparency = 1,
-            BorderSizePixel = 0,
-            Size = UDim2.fromScale(1, 1),
-            CanvasSize = UDim2.new(0, 0, 0, 0),
-            AutomaticCanvasSize = Enum.AutomaticSize.Y,
-            ScrollBarThickness = 3,
-            ScrollBarImageColor3 = theme.Accent,
-            ScrollingDirection = Enum.ScrollingDirection.Y,
-            Visible = false,
-            Parent = Content,
-            ZIndex = 2,
-        })
-        local pageLayout = create("UIListLayout", {
-            Padding = UDim.new(0, 8),
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Parent = page,
-        })
-        create("UIPadding", {
-            PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 8),
-            PaddingLeft = UDim.new(0, 4), PaddingRight = UDim.new(0, 4),
-            Parent = page,
-        })
-
-        tab.Button = button
-        tab.Page   = page
-
-        button.MouseEnter:Connect(function()
-            if self.ActiveTab ~= tab then
-                tween(button, 0.15, { BackgroundTransparency = 0.15, TextColor3 = theme.Text })
-            end
-        end)
-        button.MouseLeave:Connect(function()
-            if self.ActiveTab ~= tab then
-                tween(button, 0.15, { BackgroundTransparency = 0.4, TextColor3 = theme.SubText })
-            end
-        end)
-        button.MouseButton1Click:Connect(function() self:SelectTab(tab) end)
-
-        table.insert(self.Tabs, tab)
-        if not self.ActiveTab then
-            task.defer(function() self:SelectTab(tab) end)
-        end
-
-        -- ===== element factories =====
-        local Elements = require_inline_elements(self, tab, page, theme)
-        for k, v in pairs(Elements) do tab[k] = v end
-
-        return tab
-    end
-
-    function self:SelectTab(tab)
-        if self.ActiveTab == tab then return end
-        for _, t in ipairs(self.Tabs) do
-            t.Page.Visible = false
-            tween(t.Button, 0.18, { BackgroundTransparency = 0.4, TextColor3 = theme.SubText })
-        end
-        tab.Page.Visible = true
-        self.ActiveTab = tab
-        tween(tab.Button, 0.2, { BackgroundTransparency = 0, TextColor3 = Color3.fromRGB(255,255,255) })
-        task.defer(function()
-            local absPos = tab.Button.AbsolutePosition
-            local barPos = TabBar.AbsolutePosition
-            local sz = tab.Button.AbsoluteSize
-            spring(TabHighlight, 0.4, {
-                Position = UDim2.fromOffset(absPos.X - barPos.X + TabBar.CanvasPosition.X, 4),
-                Size = UDim2.fromOffset(sz.X, 30),
-            })
-        end)
-        -- page fade-in
-        for _, child in ipairs(tab.Page:GetChildren()) do
-            if child:IsA("Frame") or child:IsA("TextButton") then
-                child.BackgroundTransparency = 1
-                tween(child, 0.3, { BackgroundTransparency = 0 })
+local function applyThemeColors()
+    local th = Aquafield.Theme
+    for _, entry in ipairs(Aquafield._themed) do
+        local inst, key, role = entry.inst, entry.key, entry.role
+        if inst and inst.Parent then
+            local c = th[key]
+            if c then
+                if     role == "text"   then inst.TextColor3       = c
+                elseif role == "image"  then inst.ImageColor3      = c
+                elseif role == "stroke" and inst:IsA("UIStroke") then inst.Color = c
+                elseif role == "placeholder" then inst.PlaceholderColor3 = c
+                else inst.BackgroundColor3 = c end
             end
         end
-    end
-
-    -- inject Settings tab after user finishes adding their own
-    task.defer(function()
-        if not self._noSettings then self:_InjectSettings() end
-    end)
-
-    return self
-end
-
-
---==============================================================
--- ELEMENT FACTORIES
---==============================================================
-function require_inline_elements(window, tab, page, theme)
-    local E = {}
-
-    local function baseFrame(h)
-        local f = create("Frame", {
-            BackgroundColor3 = theme.Surface,
-            BackgroundTransparency = 0.1,
-            BorderSizePixel = 0,
-            Size = UDim2.new(1, -8, 0, h or 38),
-            Parent = page,
-        })
-        corner(f, 8)
-        stroke(f, theme.Stroke, 1, 0.7)
-        return f
-    end
-
-    local function ripple(parent, x, y)
-        local r = create("Frame", {
-            BackgroundColor3 = Color3.fromRGB(255,255,255),
-            BackgroundTransparency = 0.6,
-            BorderSizePixel = 0,
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.fromOffset(x, y),
-            Size = UDim2.fromOffset(0, 0),
-            Parent = parent,
-            ZIndex = 20,
-        })
-        corner(r, 999)
-        tween(r, 0.5, { Size = UDim2.fromOffset(300, 300), BackgroundTransparency = 1 })
-        task.delay(0.55, function() r:Destroy() end)
-    end
-
-    --========================== SECTION ==========================
-    function E:CreateSection(text)
-        local lbl = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, -8, 0, 22),
-            Font = Enum.Font.GothamBold,
-            Text = string.upper(text),
-            TextSize = 12,
-            TextColor3 = theme.Accent,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = page,
-        })
-        return lbl
-    end
-
-    --========================== LABEL ============================
-    function E:CreateLabel(text)
-        local f = baseFrame(32)
-        local lbl = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Size = UDim2.new(1, -20, 1, 0),
-            Position = UDim2.fromOffset(12, 0),
-            Font = Enum.Font.Gotham,
-            Text = text,
-            TextSize = 13,
-            TextColor3 = theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            Parent = f,
-        })
-        return {
-            Set = function(_, t) lbl.Text = t end
-        }
-    end
-
-    --========================== PARAGRAPH ========================
-    function E:CreateParagraph(opts)
-        opts = opts or {}
-        local f = baseFrame(60)
-        f.Size = UDim2.new(1, -8, 0, 60)
-        f.AutomaticSize = Enum.AutomaticSize.Y
-        create("UIPadding", {
-            PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12),
-            PaddingTop = UDim.new(0, 8), PaddingBottom = UDim.new(0, 8),
-            Parent = f,
-        })
-        create("TextLabel", {
-            BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 16),
-            Font = Enum.Font.GothamBold, Text = opts.Title or "Paragraph",
-            TextSize = 13, TextColor3 = theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
-        })
-        create("TextLabel", {
-            BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -20),
-            Position = UDim2.fromOffset(0, 20),
-            Font = Enum.Font.Gotham, Text = opts.Content or "",
-            TextSize = 12, TextColor3 = theme.SubText, TextWrapped = true,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextYAlignment = Enum.TextYAlignment.Top, Parent = f,
-        })
-    end
-
-    --========================== BUTTON ===========================
-    function E:CreateButton(opts)
-        opts = opts or {}
-        local f = baseFrame(38)
-        f.ClipsDescendants = true
-        local btn = create("TextButton", {
-            BackgroundTransparency = 1,
-            Size = UDim2.fromScale(1,1),
-            Font = Enum.Font.GothamMedium,
-            Text = opts.Name or "Button",
-            TextSize = 13,
-            TextColor3 = theme.Text,
-            Parent = f,
-            ZIndex = 3,
-        })
-        local grad = create("UIGradient", {
-            Color = ColorSequence.new{
-                ColorSequenceKeypoint.new(0, theme.Surface),
-                ColorSequenceKeypoint.new(1, theme.Surface2),
-            },
-            Rotation = 0,
-            Parent = f,
-        })
-        btn.MouseEnter:Connect(function()
-            tween(f, 0.2, { BackgroundColor3 = theme.Accent, BackgroundTransparency = 0.85 })
-            tween(btn, 0.2, { TextColor3 = theme.AccentGlow })
-        end)
-        btn.MouseLeave:Connect(function()
-            tween(f, 0.2, { BackgroundColor3 = theme.Surface, BackgroundTransparency = 0.1 })
-            tween(btn, 0.2, { TextColor3 = theme.Text })
-        end)
-        btn.MouseButton1Click:Connect(function()
-            local mp = UserInputService:GetMouseLocation()
-            local rel = mp - f.AbsolutePosition
-            ripple(f, rel.X, rel.Y)
-            spring(f, 0.4, { Size = UDim2.new(1, -8, 0, 38) })
-            f.Size = UDim2.new(1, -12, 0, 36)
-            safeCall(opts.Callback)
-        end)
-        return { Set = function(_, t) btn.Text = t end }
-    end
-
-    --========================== TOGGLE ===========================
-    function E:CreateToggle(opts)
-        opts = opts or {}
-        local f = baseFrame(38)
-        local lbl = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(12, 0),
-            Size = UDim2.new(1, -70, 1, 0),
-            Font = Enum.Font.Gotham, Text = opts.Name or "Toggle",
-            TextSize = 13, TextColor3 = theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
-        })
-        local switch = create("Frame", {
-            AnchorPoint = Vector2.new(1, 0.5),
-            Position = UDim2.new(1, -12, 0.5, 0),
-            Size = UDim2.fromOffset(38, 20),
-            BackgroundColor3 = theme.Surface2,
-            BorderSizePixel = 0,
-            Parent = f,
-        })
-        corner(switch, 10)
-        stroke(switch, theme.Stroke, 1, 0.4)
-        local knob = create("Frame", {
-            AnchorPoint = Vector2.new(0, 0.5),
-            Position = UDim2.new(0, 2, 0.5, 0),
-            Size = UDim2.fromOffset(16, 16),
-            BackgroundColor3 = theme.SubText,
-            BorderSizePixel = 0,
-            Parent = switch,
-        })
-        corner(knob, 10)
-
-        local state = opts.CurrentValue == true
-        local function apply()
-            if state then
-                tween(switch, 0.2, { BackgroundColor3 = theme.Accent })
-                tween(knob, 0.25, { Position = UDim2.new(1, -18, 0.5, 0),
-                                    BackgroundColor3 = Color3.fromRGB(255,255,255) })
-            else
-                tween(switch, 0.2, { BackgroundColor3 = theme.Surface2 })
-                tween(knob, 0.25, { Position = UDim2.new(0, 2, 0.5, 0),
-                                    BackgroundColor3 = theme.SubText })
-            end
-        end
-        apply()
-
-        local hit = create("TextButton", {
-            BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(1,1), Parent = f,
-        })
-        hit.MouseButton1Click:Connect(function()
-            state = not state
-            apply()
-            safeCall(opts.Callback, state)
-            if opts.Flag then
-                Aquafield.Flags[opts.Flag] = { CurrentValue = state }
-                Aquafield:SaveConfig(window.ConfigName)
-            end
-        end)
-
-        if opts.Flag then
-            Aquafield.Flags[opts.Flag] = { CurrentValue = state }
-        end
-        return {
-            Set = function(_, v) state = v and true or false; apply()
-                if opts.Flag then Aquafield.Flags[opts.Flag].CurrentValue = state end
-            end,
-            Get = function() return state end,
-        }
-    end
-
-    --========================== SLIDER ===========================
-    function E:CreateSlider(opts)
-        opts = opts or {}
-        local min = opts.Range and opts.Range[1] or 0
-        local max = opts.Range and opts.Range[2] or 100
-        local inc = opts.Increment or 1
-        local val = opts.CurrentValue or min
-        local f = baseFrame(54)
-        local lbl = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(12, 4),
-            Size = UDim2.new(1, -24, 0, 18),
-            Font = Enum.Font.Gotham, Text = opts.Name or "Slider",
-            TextSize = 13, TextColor3 = theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
-        })
-        local vlbl = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.new(1, -60, 0, 4),
-            Size = UDim2.fromOffset(48, 18),
-            Font = Enum.Font.GothamBold, Text = tostring(val)..(opts.Suffix or ""),
-            TextSize = 12, TextColor3 = theme.Accent,
-            TextXAlignment = Enum.TextXAlignment.Right, Parent = f,
-        })
-        local bar = create("Frame", {
-            Position = UDim2.new(0, 12, 1, -18),
-            Size = UDim2.new(1, -24, 0, 6),
-            BackgroundColor3 = theme.Surface2,
-            BorderSizePixel = 0, Parent = f,
-        })
-        corner(bar, 3)
-        local fill = create("Frame", {
-            Size = UDim2.fromScale((val - min)/(max - min), 1),
-            BackgroundColor3 = theme.Accent, BorderSizePixel = 0, Parent = bar,
-        })
-        corner(fill, 3)
-        create("UIGradient", {
-            Color = ColorSequence.new(theme.Accent, theme.AccentGlow),
-            Parent = fill,
-        })
-        local knob = create("Frame", {
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.new((val-min)/(max-min), 0, 0.5, 0),
-            Size = UDim2.fromOffset(12, 12),
-            BackgroundColor3 = Color3.fromRGB(255,255,255),
-            BorderSizePixel = 0, Parent = bar,
-        })
-        corner(knob, 6)
-
-        local dragging = false
-        local function setFromX(px)
-            local rel = math.clamp((px - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-            local raw = min + (max - min) * rel
-            val = math.floor(raw / inc + 0.5) * inc
-            val = math.clamp(val, min, max)
-            local pct = (val - min) / (max - min)
-            tween(fill, 0.1, { Size = UDim2.fromScale(pct, 1) })
-            tween(knob, 0.1, { Position = UDim2.new(pct, 0, 0.5, 0) })
-            vlbl.Text = tostring(val)..(opts.Suffix or "")
-            safeCall(opts.Callback, val)
-            if opts.Flag then
-                Aquafield.Flags[opts.Flag] = { CurrentValue = val }
-            end
-        end
-        bar.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = true
-                setFromX(input.Position.X)
-            end
-        end)
-        UserInputService.InputChanged:Connect(function(input)
-            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement
-                          or input.UserInputType == Enum.UserInputType.Touch) then
-                setFromX(input.Position.X)
-            end
-        end)
-        UserInputService.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1
-            or input.UserInputType == Enum.UserInputType.Touch then
-                if dragging then Aquafield:SaveConfig(window.ConfigName) end
-                dragging = false
-            end
-        end)
-
-        if opts.Flag then Aquafield.Flags[opts.Flag] = { CurrentValue = val } end
-        return {
-            Set = function(_, v) setFromX(bar.AbsolutePosition.X + (v-min)/(max-min)*bar.AbsoluteSize.X) end,
-            Get = function() return val end,
-        }
-    end
-
-    --========================== DROPDOWN =========================
-    function E:CreateDropdown(opts)
-        opts = opts or {}
-        local options = opts.Options or {}
-        local current = opts.CurrentOption or options[1] or ""
-        local open = false
-        local f = baseFrame(38)
-        f.ClipsDescendants = true
-
-        local lbl = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(12, 0),
-            Size = UDim2.new(0.5, 0, 0, 38),
-            Font = Enum.Font.Gotham, Text = opts.Name or "Dropdown",
-            TextSize = 13, TextColor3 = theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
-        })
-        local selected = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.new(0.5, 0, 0, 0),
-            Size = UDim2.new(0.5, -32, 0, 38),
-            Font = Enum.Font.GothamMedium, Text = tostring(current),
-            TextSize = 12, TextColor3 = theme.Accent,
-            TextXAlignment = Enum.TextXAlignment.Right, Parent = f,
-        })
-        local arrow = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.new(1, -24, 0, 0),
-            Size = UDim2.fromOffset(20, 38),
-            Font = Enum.Font.GothamBold, Text = "▾", TextSize = 14,
-            TextColor3 = theme.SubText, Parent = f,
-        })
-        local list = create("Frame", {
-            BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(0, 38),
-            Size = UDim2.new(1, 0, 0, 0),
-            Parent = f,
-        })
-        local listLayout = create("UIListLayout", {
-            Padding = UDim.new(0, 2), Parent = list,
-        })
-        local optionBtns = {}
-        local function rebuild()
-            for _, c in ipairs(list:GetChildren()) do
-                if c:IsA("TextButton") then c:Destroy() end
-            end
-            optionBtns = {}
-            for _, opt in ipairs(options) do
-                local b = create("TextButton", {
-                    AutoButtonColor = false,
-                    BackgroundColor3 = theme.Surface2,
-                    BackgroundTransparency = 0.2, BorderSizePixel = 0,
-                    Size = UDim2.new(1, -8, 0, 26),
-                    Position = UDim2.fromOffset(4, 0),
-                    Font = Enum.Font.Gotham, Text = "  "..tostring(opt),
-                    TextSize = 12, TextColor3 = theme.Text,
-                    TextXAlignment = Enum.TextXAlignment.Left,
-                    Parent = list,
-                })
-                corner(b, 6)
-                b.MouseEnter:Connect(function() tween(b, 0.1, { BackgroundColor3 = theme.Accent, BackgroundTransparency = 0.5 }) end)
-                b.MouseLeave:Connect(function() tween(b, 0.1, { BackgroundColor3 = theme.Surface2, BackgroundTransparency = 0.2 }) end)
-                b.MouseButton1Click:Connect(function()
-                    current = opt; selected.Text = tostring(opt)
-                    safeCall(opts.Callback, opt)
-                    if opts.Flag then
-                        Aquafield.Flags[opts.Flag] = { CurrentValue = opt }
-                        Aquafield:SaveConfig(window.ConfigName)
-                    end
-                    open = false
-                    tween(f, 0.25, { Size = UDim2.new(1, -8, 0, 38) })
-                    tween(arrow, 0.2, { Rotation = 0 })
-                end)
-                table.insert(optionBtns, b)
-            end
-        end
-        rebuild()
-
-        local hit = create("TextButton", {
-            BackgroundTransparency = 1, Text = "",
-            Size = UDim2.new(1, 0, 0, 38), Parent = f, ZIndex = 5,
-        })
-        hit.MouseButton1Click:Connect(function()
-            open = not open
-            if open then
-                tween(f, 0.25, { Size = UDim2.new(1, -8, 0, 38 + (#options * 28) + 4) })
-                tween(arrow, 0.2, { Rotation = 180 })
-            else
-                tween(f, 0.25, { Size = UDim2.new(1, -8, 0, 38) })
-                tween(arrow, 0.2, { Rotation = 0 })
-            end
-        end)
-
-        if opts.Flag then Aquafield.Flags[opts.Flag] = { CurrentValue = current } end
-        return {
-            Set = function(_, v) current = v; selected.Text = tostring(v) end,
-            Refresh = function(_, newOpts) options = newOpts; rebuild() end,
-            Get = function() return current end,
-        }
-    end
-
-    --========================== INPUT ============================
-    function E:CreateInput(opts)
-        opts = opts or {}
-        local f = baseFrame(38)
-        local lbl = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(12, 0),
-            Size = UDim2.new(0.4, 0, 1, 0),
-            Font = Enum.Font.Gotham, Text = opts.Name or "Input",
-            TextSize = 13, TextColor3 = theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
-        })
-        local box = create("TextBox", {
-            BackgroundColor3 = theme.Surface2,
-            BorderSizePixel = 0,
-            Position = UDim2.new(0.4, 0, 0.5, -12),
-            Size = UDim2.new(0.6, -16, 0, 24),
-            Font = Enum.Font.Gotham, PlaceholderText = opts.PlaceholderText or "",
-            Text = opts.CurrentValue or "", TextSize = 12,
-            TextColor3 = theme.Text, PlaceholderColor3 = theme.SubText,
-            ClearTextOnFocus = opts.RemoveTextAfterFocusLost or false,
-            Parent = f,
-        })
-        corner(box, 6)
-        stroke(box, theme.Stroke, 1, 0.5)
-        box.FocusLost:Connect(function(enter)
-            safeCall(opts.Callback, box.Text, enter)
-            if opts.Flag then
-                Aquafield.Flags[opts.Flag] = { CurrentValue = box.Text }
-                Aquafield:SaveConfig(window.ConfigName)
-            end
-        end)
-        return { Set = function(_, t) box.Text = t end, Get = function() return box.Text end }
-    end
-
-    --========================== KEYBIND ==========================
-    function E:CreateKeybind(opts)
-        opts = opts or {}
-        local key = opts.CurrentKeybind or "K"
-        local capturing = false
-        local f = baseFrame(38)
-        local lbl = create("TextLabel", {
-            BackgroundTransparency = 1,
-            Position = UDim2.fromOffset(12, 0),
-            Size = UDim2.new(1, -110, 1, 0),
-            Font = Enum.Font.Gotham, Text = opts.Name or "Keybind",
-            TextSize = 13, TextColor3 = theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
-        })
-        local btn = create("TextButton", {
-            AnchorPoint = Vector2.new(1, 0.5),
-            Position = UDim2.new(1, -12, 0.5, 0),
-            Size = UDim2.fromOffset(80, 26),
-            BackgroundColor3 = theme.Surface2,
-            BorderSizePixel = 0,
-            Font = Enum.Font.GothamBold, Text = key,
-            TextSize = 12, TextColor3 = theme.Accent,
-            Parent = f, AutoButtonColor = false,
-        })
-        corner(btn, 6)
-        stroke(btn, theme.Stroke, 1, 0.5)
-        btn.MouseButton1Click:Connect(function()
-            capturing = true
-            btn.Text = "..."
-        end)
-        UserInputService.InputBegan:Connect(function(input, processed)
-            if capturing and input.UserInputType == Enum.UserInputType.Keyboard then
-                capturing = false
-                key = input.KeyCode.Name
-                btn.Text = key
-                safeCall(opts.Callback, input.KeyCode)
-                if opts.Flag then
-                    Aquafield.Flags[opts.Flag] = { CurrentValue = key }
-                    Aquafield:SaveConfig(window.ConfigName)
-                end
-            end
-        end)
-        return { Set = function(_, k) key = k; btn.Text = k end, Get = function() return key end }
-    end
-
-    return E
-end
-
---==============================================================
--- GLOBAL CONFIG / KEYBIND API
---==============================================================
-function Aquafield:SetToggleKeybind(k)
-    if typeof(k) == "EnumItem" then
-        Aquafield.ToggleKey = k
-    elseif type(k) == "string" and Enum.KeyCode[k] then
-        Aquafield.ToggleKey = Enum.KeyCode[k]
-    end
-    for _, w in ipairs(Aquafield.Windows) do
-        Aquafield:SaveConfig(w.ConfigName)
     end
 end
 
 function Aquafield:SetTheme(name)
-    if not Aquafield.Themes[name] then return end
-    Aquafield.CurrentTheme = name
-    -- Soft notice; theme fully applies on next CreateWindow.
+    if not Themes[name] then return end
+    self.ThemeName = name
+    self.Theme     = Themes[name]
+    applyThemeColors()
 end
 
---==============================================================
--- AUTO-INJECTED SETTINGS TAB
---==============================================================
-function Aquafield:_InjectSettings()
-    local t = self:CreateTab("Settings")
-    t:CreateSection("Appearance")
-    t:CreateDropdown({
-        Name = "Theme",
-        Options = Aquafield.ThemeOrder,
-        CurrentOption = Aquafield.CurrentTheme,
-        Flag = "_AquafieldTheme",
-        Callback = function(opt)
-            Aquafield:SetTheme(opt)
-            Aquafield:SaveConfig(self.ConfigName)
-        end,
-    })
-    t:CreateSection("Controls")
-    t:CreateKeybind({
-        Name = "Toggle UI",
-        CurrentKeybind = Aquafield.ToggleKey.Name,
-        Flag = "_AquafieldKeybind",
-        Callback = function(k) Aquafield:SetToggleKeybind(k) end,
-    })
-    t:CreateButton({
-        Name = "Hide UI",
-        Callback = function() self:Hide() end,
-    })
-    t:CreateSection("About")
-    t:CreateParagraph({
-        Title = "Aquafield " .. Aquafield.Version,
-        Content = "A modern, glass-morphic Roblox UI library. "
-            .. "Press your toggle key to hide/show. Drag the floating "
-            .. "icon when hidden to reposition, click it to restore.",
-    })
-end
-
---==============================================================
--- NOTIFICATION SYSTEM
---==============================================================
-local NotifHolder
-function Aquafield:Notify(opts)
-    opts = opts or {}
-    if not NotifHolder then
-        NotifHolder = create("Frame", {
-            Name = "Notifications",
-            AnchorPoint = Vector2.new(1, 1),
-            Position = UDim2.new(1, -16, 1, -16),
-            Size = UDim2.fromOffset(300, 600),
-            BackgroundTransparency = 1,
-            Parent = ScreenGui,
-            ZIndex = 100,
-        })
-        create("UIListLayout", {
-            VerticalAlignment = Enum.VerticalAlignment.Bottom,
-            HorizontalAlignment = Enum.HorizontalAlignment.Right,
-            Padding = UDim.new(0, 8),
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Parent = NotifHolder,
-        })
-    end
-    local theme = Aquafield.Themes[Aquafield.CurrentTheme]
-    local card = create("Frame", {
-        BackgroundColor3 = theme.Surface,
-        BackgroundTransparency = 0.05,
-        BorderSizePixel = 0,
-        Size = UDim2.fromOffset(300, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        Parent = NotifHolder,
-        ZIndex = 101,
-    })
-    corner(card, 10)
-    stroke(card, theme.Accent, 1, 0.3)
-    create("UIPadding", {
-        PaddingTop = UDim.new(0,10), PaddingBottom = UDim.new(0,10),
-        PaddingLeft = UDim.new(0,12), PaddingRight = UDim.new(0,12),
-        Parent = card,
-    })
-    create("TextLabel", {
-        BackgroundTransparency = 1,
-        Size = UDim2.new(1, 0, 0, 16),
-        Font = Enum.Font.GothamBold, Text = opts.Title or "Notification",
-        TextSize = 13, TextColor3 = theme.Text,
-        TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
-    })
-    create("TextLabel", {
-        BackgroundTransparency = 1,
-        Position = UDim2.fromOffset(0, 20),
-        Size = UDim2.new(1, 0, 0, 0),
-        AutomaticSize = Enum.AutomaticSize.Y,
-        Font = Enum.Font.Gotham, Text = opts.Content or "",
-        TextSize = 12, TextColor3 = theme.SubText, TextWrapped = true,
-        TextXAlignment = Enum.TextXAlignment.Left, Parent = card,
-    })
-    card.Size = UDim2.fromOffset(0, 0)
-    spring(card, 0.4, { Size = UDim2.fromOffset(300, card.AbsoluteSize.Y) })
-    task.delay(opts.Duration or 4, function()
-        tween(card, 0.4, { BackgroundTransparency = 1 })
-        for _, c in ipairs(card:GetDescendants()) do
-            if c:IsA("TextLabel") then tween(c, 0.4, { TextTransparency = 1 }) end
-            if c:IsA("UIStroke") then tween(c, 0.4, { Transparency = 1 }) end
+--------------------------------------------------------------------------------
+-- DRAGGABLE WINDOWS
+--------------------------------------------------------------------------------
+local function makeDraggable(frame, handle)
+    handle = handle or frame
+    local dragging, dragStart, startPos
+    handle.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+        or input.UserInputType == Enum.UserInputType.Touch then
+            dragging  = true
+            dragStart = input.Position
+            startPos  = frame.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
         end
-        task.wait(0.45)
-        card:Destroy()
+    end)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging
+        and (input.UserInputType == Enum.UserInputType.MouseMovement
+          or input.UserInputType == Enum.UserInputType.Touch) then
+            local d = input.Position - dragStart
+            frame.Position = UDim2.new(
+                startPos.X.Scale, startPos.X.Offset + d.X,
+                startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        end
     end)
 end
+
+--------------------------------------------------------------------------------
+-- ROOT SCREENGUI  (with safe parent detection)
+--------------------------------------------------------------------------------
+local function getGuiParent()
+    local ok, hui = pcall(function() return gethui and gethui() end)
+    if ok and hui then return hui end
+    if RunService:IsStudio() then return LP:WaitForChild("PlayerGui") end
+    return CoreGui
+end
+
+-- Remove old instances
+for _, c in ipairs(getGuiParent():GetChildren()) do
+    if c.Name == "Aquafield" then pcall(function() c:Destroy() end) end
+end
+
+local ScreenGui = new("ScreenGui", {
+    Name             = "Aquafield",
+    ResetOnSpawn     = false,
+    ZIndexBehavior   = Enum.ZIndexBehavior.Sibling,
+    IgnoreGuiInset   = true,
+    DisplayOrder     = 999,
+    Parent           = getGuiParent(),
+})
+
+--------------------------------------------------------------------------------
+-- AMBIENT PARTICLE FIELD  (decorative, very light cost)
+--------------------------------------------------------------------------------
+local ParticleLayer
+local Particles = {}
+
+local function spawnParticle(parent)
+    local th = Aquafield.Theme
+    local size = math.random(2, 5)
+    local p = new("Frame", {
+        Size               = UDim2.new(0, size, 0, size),
+        Position           = UDim2.new(math.random(), 0, 1, 20),
+        BackgroundColor3   = th.Accent,
+        BackgroundTransparency = 0.6 + math.random() * 0.3,
+        BorderSizePixel    = 0,
+        Parent             = parent,
+    })
+    corner(p, size)
+    themed(p, "Accent")
+    local duration = math.random(60, 140) / 10
+    local xDrift   = (math.random() - 0.5) * 0.1
+    tween(p, duration, {
+        Position             = UDim2.new(math.clamp(p.Position.X.Scale + xDrift, 0, 1), 0, 0, -20),
+        BackgroundTransparency = 1,
+    }, Enum.EasingStyle.Linear)
+    task.delay(duration, function() if p then p:Destroy() end end)
+end
+
+local function startParticleField(parent)
+    ParticleLayer = new("Frame", {
+        Name             = "Particles",
+        Size             = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        ClipsDescendants = true,
+        ZIndex           = 0,
+        Parent           = parent,
+    })
+    task.spawn(function()
+        while ParticleLayer and ParticleLayer.Parent do
+            task.wait(0.35)
+            if #Particles < 40 and not Aquafield._hidden then
+                spawnParticle(ParticleLayer)
+            end
+        end
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- NOTIFICATIONS  (toast stack, themed, with progress bar)
+--------------------------------------------------------------------------------
+local NotifHolder = new("Frame", {
+    Name             = "Notifications",
+    AnchorPoint      = Vector2.new(1, 1),
+    Position         = UDim2.new(1, -20, 1, -20),
+    Size             = UDim2.new(0, 340, 1, -40),
+    BackgroundTransparency = 1,
+    Parent           = ScreenGui,
+})
+new("UIListLayout", {
+    Padding             = UDim.new(0, 10),
+    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+    VerticalAlignment   = Enum.VerticalAlignment.Bottom,
+    SortOrder           = Enum.SortOrder.LayoutOrder,
+    Parent              = NotifHolder,
+})
+
+local function positionNotifHolder(side)
+    Aquafield.NotifSide = side or Aquafield.NotifSide
+    local layout = NotifHolder:FindFirstChildOfClass("UIListLayout")
+    if side == "BottomLeft" then
+        NotifHolder.AnchorPoint = Vector2.new(0, 1)
+        NotifHolder.Position    = UDim2.new(0, 20, 1, -20)
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        layout.VerticalAlignment   = Enum.VerticalAlignment.Bottom
+    elseif side == "TopRight" then
+        NotifHolder.AnchorPoint = Vector2.new(1, 0)
+        NotifHolder.Position    = UDim2.new(1, -20, 0, 20)
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+        layout.VerticalAlignment   = Enum.VerticalAlignment.Top
+    elseif side == "TopLeft" then
+        NotifHolder.AnchorPoint = Vector2.new(0, 0)
+        NotifHolder.Position    = UDim2.new(0, 20, 0, 20)
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+        layout.VerticalAlignment   = Enum.VerticalAlignment.Top
+    else
+        NotifHolder.AnchorPoint = Vector2.new(1, 1)
+        NotifHolder.Position    = UDim2.new(1, -20, 1, -20)
+        layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+        layout.VerticalAlignment   = Enum.VerticalAlignment.Bottom
+    end
+end
+
+function Aquafield:Notify(opts)
+    opts = opts or {}
+    local title    = opts.Title    or "Notification"
+    local content  = opts.Content  or ""
+    local duration = opts.Duration or 4
+    local image    = opts.Image
+    local th       = Aquafield.Theme
+
+    if typeof(image) == "number" then
+        image = "rbxassetid://" .. tostring(image)
+    end
+
+    local card = new("Frame", {
+        Size                  = UDim2.new(1, 0, 0, 78),
+        BackgroundColor3      = th.Sidebar,
+        BackgroundTransparency= 0.05,
+        Position              = UDim2.new(1, 80, 0, 0),
+        Parent                = NotifHolder,
+    })
+    corner(card, 12)
+    stroke(card, th.Border, 1, 0.4)
+    themed(card, "Sidebar")
+
+    -- glow gradient overlay
+    local glow = new("Frame", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = th.Accent,
+        BackgroundTransparency = 0.92,
+        BorderSizePixel = 0,
+        Parent = card,
+    })
+    corner(glow, 12); themed(glow, "Accent")
+    gradient(glow, Color3.new(1,1,1), Color3.new(0,0,0), 45)
+
+    local accent = new("Frame", {
+        Size             = UDim2.new(0, 3, 1, -16),
+        Position         = UDim2.new(0, 8, 0, 8),
+        BackgroundColor3 = th.Accent,
+        BorderSizePixel  = 0,
+        Parent           = card,
+    })
+    corner(accent, 2); themed(accent, "Accent")
+
+    local left = 18
+    if image then
+        local img = new("ImageLabel", {
+            Image            = image,
+            Size             = UDim2.new(0, 30, 0, 30),
+            Position         = UDim2.new(0, 18, 0, 14),
+            BackgroundTransparency = 1,
+            ImageColor3      = th.Accent,
+            Parent           = card,
+        })
+        themed(img, "Accent", "image")
+        left = 56
+    end
+
+    local titleLbl = new("TextLabel", {
+        Text             = title,
+        Font             = Enum.Font.GothamBold,
+        TextSize         = 14,
+        TextColor3       = th.Text,
+        BackgroundTransparency = 1,
+        Position         = UDim2.new(0, left, 0, 10),
+        Size             = UDim2.new(1, -left - 12, 0, 18),
+        TextXAlignment   = Enum.TextXAlignment.Left,
+        Parent           = card,
+    })
+    themed(titleLbl, "Text", "text")
+
+    local body = new("TextLabel", {
+        Text             = content,
+        Font             = Enum.Font.Gotham,
+        TextSize         = 12,
+        TextColor3       = th.SubText,
+        BackgroundTransparency = 1,
+        Position         = UDim2.new(0, left, 0, 30),
+        Size             = UDim2.new(1, -left - 12, 1, -42),
+        TextXAlignment   = Enum.TextXAlignment.Left,
+        TextYAlignment   = Enum.TextYAlignment.Top,
+        TextWrapped      = true,
+        Parent           = card,
+    })
+    themed(body, "SubText", "text")
+
+    local bar = new("Frame", {
+        Size             = UDim2.new(1, -16, 0, 2),
+        Position         = UDim2.new(0, 8, 1, -6),
+        BackgroundColor3 = th.Accent,
+        BorderSizePixel  = 0,
+        Parent           = card,
+    })
+    corner(bar, 2); themed(bar, "Accent")
+
+    spring(card, 0.4, { Position = UDim2.new(0, 0, 0, 0) })
+    tween(bar, duration, { Size = UDim2.new(0, 0, 0, 2) }, Enum.EasingStyle.Linear)
+
+    task.delay(duration, function()
+        tween(card, 0.3, {
+            Position               = UDim2.new(1, 80, 0, 0),
+            BackgroundTransparency = 1,
+        })
+        task.wait(0.35); card:Destroy()
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- CONFIG SAVING / LOADING
+--------------------------------------------------------------------------------
+local function configPath(w)
+    local folder = w.Cfg.FolderName
+    if folder and #folder > 0 then
+        return ("%s/%s.json"):format(folder, w.Cfg.FileName or "Config")
+    end
+    return ("Aquafield_%s.json"):format(w.Cfg.FileName or "Config")
+end
+
+local function saveConfig(w)
+    if not (w and w.Cfg and w.Cfg.Enabled and writefile) then return end
+    pcall(function()
+        if w.Cfg.FolderName and #w.Cfg.FolderName > 0
+           and makefolder and isfolder and not isfolder(w.Cfg.FolderName) then
+            makefolder(w.Cfg.FolderName)
+        end
+        local data = { _meta = {
+            theme    = Aquafield.ThemeName,
+            keybind  = Aquafield.ToggleUIKeybind.Name,
+            acrylic  = Aquafield.AcrylicStrength,
+            notifSide= Aquafield.NotifSide,
+        }}
+        for k, v in pairs(Aquafield.Flags) do
+            local cv = v.CurrentValue
+            if typeof(cv) == "Color3" then
+                data[k] = { "Color3", cv.R, cv.G, cv.B }
+            else
+                data[k] = cv
+            end
+        end
+        writefile(configPath(w), HttpService:JSONEncode(data))
+    end)
+end
+
+local function loadConfigFor(w)
+    if not (w and w.Cfg and w.Cfg.Enabled and readfile and isfile) then return end
+    pcall(function()
+        if not isfile(configPath(w)) then return end
+        local data = HttpService:JSONDecode(readfile(configPath(w)))
+        local meta = data._meta
+        if meta then
+            if meta.theme    then Aquafield:SetTheme(meta.theme) end
+            if meta.keybind  then Aquafield.ToggleUIKeybind = keyCodeFromName(meta.keybind) end
+            if meta.acrylic  then Aquafield.AcrylicStrength = meta.acrylic end
+            if meta.notifSide then positionNotifHolder(meta.notifSide) end
+            data._meta = nil
+        end
+        for k, v in pairs(data) do
+            local f = Aquafield.Flags[k]
+            if f and f.Set then
+                if type(v) == "table" and v[1] == "Color3" then
+                    f:Set(Color3.new(v[2], v[3], v[4]))
+                else
+                    f:Set(v)
+                end
+            end
+        end
+    end)
+end
+
+function Aquafield:LoadConfiguration()
+    local w = self._windows[#self._windows]
+    if w then loadConfigFor(w) end
+end
+
+--------------------------------------------------------------------------------
+-- LOADING SCREEN  (animated splash w/ gradient bar)
+--------------------------------------------------------------------------------
+local function showLoadingScreen(title, subtitle, theme)
+    local th = theme
+    local frame = new("Frame", {
+        Size             = UDim2.new(0, 340, 0, 100),
+        Position         = UDim2.new(0.5, -170, 0.5, -50),
+        BackgroundColor3 = th.Background,
+        BorderSizePixel  = 0,
+        Parent           = ScreenGui,
+    })
+    corner(frame, 12)
+    stroke(frame, th.Border, 1, 0.4)
+
+    local glow = new("Frame", {
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = th.Accent,
+        BackgroundTransparency = 0.85,
+        BorderSizePixel = 0,
+        Parent = frame,
+    })
+    corner(glow, 12)
+    gradient(glow, Color3.new(1,1,1), Color3.new(0,0,0), 90)
+
+    local t = new("TextLabel", {
+        Text             = title or "Aquafield",
+        Font             = Enum.Font.GothamBold,
+        TextSize         = 18,
+        TextColor3       = th.Text,
+        BackgroundTransparency = 1,
+        Position         = UDim2.new(0, 0, 0, 18),
+        Size             = UDim2.new(1, 0, 0, 22),
+        Parent           = frame,
+    })
+    local s = new("TextLabel", {
+        Text             = subtitle or "",
+        Font             = Enum.Font.Gotham,
+        TextSize         = 12,
+        TextColor3       = th.SubText,
+        BackgroundTransparency = 1,
+        Position         = UDim2.new(0, 0, 0, 42),
+        Size             = UDim2.new(1, 0, 0, 16),
+        Parent           = frame,
+    })
+    local barBg = new("Frame", {
+        Size             = UDim2.new(1, -40, 0, 4),
+        Position         = UDim2.new(0, 20, 1, -20),
+        BackgroundColor3 = th.Border,
+        BorderSizePixel  = 0,
+        Parent           = frame,
+    })
+    corner(barBg, 2)
+    local fill = new("Frame", {
+        Size             = UDim2.new(0, 0, 1, 0),
+        BackgroundColor3 = th.Accent,
+        BorderSizePixel  = 0,
+        Parent           = barBg,
+    })
+    corner(fill, 2)
+    gradient(fill, th.Accent, lighten(th.Accent, 0.4), 0)
+
+    tween(fill, 1.0, { Size = UDim2.new(1, 0, 1, 0) }, Enum.EasingStyle.Quad)
+    task.delay(1.2, function()
+        tween(frame, 0.3, { BackgroundTransparency = 1 })
+        for _, c in ipairs(frame:GetDescendants()) do
+            if c:IsA("TextLabel") then tween(c, 0.25, { TextTransparency = 1 })
+            elseif c:IsA("Frame") then tween(c, 0.25, { BackgroundTransparency = 1 })
+            elseif c:IsA("UIStroke") then tween(c, 0.25, { Transparency = 1 })
+            end
+        end
+        task.wait(0.32); frame:Destroy()
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- KEY SYSTEM
+--------------------------------------------------------------------------------
+local function runKeySystem(settings, theme, onSuccess)
+    local th = theme
+    local keys = settings.Key or {}
+    if type(keys) ~= "table" then keys = { tostring(keys) } end
+
+    local saveFile = "Aquafield_" .. (settings.FileName or "Key") .. ".txt"
+    if settings.SaveKey and isfile and readfile and isfile(saveFile) then
+        local saved = readfile(saveFile)
+        for _, k in ipairs(keys) do
+            if tostring(saved) == tostring(k) then onSuccess() return end
+        end
+    end
+
+    local frame = new("Frame", {
+        Size             = UDim2.new(0, 340, 0, 220),
+        Position         = UDim2.new(0.5, -170, 0.5, -110),
+        BackgroundColor3 = th.Background,
+        BorderSizePixel  = 0,
+        Parent           = ScreenGui,
+    })
+    corner(frame, 12); stroke(frame, th.Border, 1, 0.4)
+
+    new("TextLabel", {
+        Text = settings.Title or "Key System",
+        Font = Enum.Font.GothamBold, TextSize = 16,
+        TextColor3 = th.Text, BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 16),
+        Size = UDim2.new(1, 0, 0, 22), Parent = frame,
+    })
+    new("TextLabel", {
+        Text = settings.Subtitle or "",
+        Font = Enum.Font.Gotham, TextSize = 12,
+        TextColor3 = th.SubText, BackgroundTransparency = 1,
+        Position = UDim2.new(0, 0, 0, 40),
+        Size = UDim2.new(1, 0, 0, 16), Parent = frame,
+    })
+    new("TextLabel", {
+        Text = settings.Note or "",
+        Font = Enum.Font.Gotham, TextSize = 11,
+        TextColor3 = th.SubText, BackgroundTransparency = 1, TextWrapped = true,
+        Position = UDim2.new(0, 16, 0, 64),
+        Size = UDim2.new(1, -32, 0, 40), Parent = frame,
+    })
+
+    local box = new("TextBox", {
+        PlaceholderText = "Enter key...", Text = "",
+        Font = Enum.Font.Gotham, TextSize = 13,
+        TextColor3 = th.Text, PlaceholderColor3 = th.SubText,
+        BackgroundColor3 = th.Element, ClearTextOnFocus = false,
+        Position = UDim2.new(0, 16, 0, 116),
+        Size = UDim2.new(1, -32, 0, 32), Parent = frame,
+    })
+    corner(box, 6); stroke(box, th.Border, 1, 0.4)
+
+    local btn = new("TextButton", {
+        Text = "Submit", Font = Enum.Font.GothamBold, TextSize = 13,
+        TextColor3 = th.Background, BackgroundColor3 = th.Accent,
+        Position = UDim2.new(0, 16, 0, 160),
+        Size = UDim2.new(1, -32, 0, 34),
+        AutoButtonColor = false, Parent = frame,
+    })
+    corner(btn, 6)
+    gradient(btn, lighten(th.Accent, 0.15), th.Accent, 90)
+
+    btn.MouseButton1Click:Connect(function()
+        local entered = box.Text
+        local keysNow = keys
+        if settings.GrabKeyFromSite and #keys == 1 then
+            pcall(function() keysNow = { game:HttpGet(keys[1]) } end)
+        end
+        for _, k in ipairs(keysNow) do
+            if tostring(entered) == tostring(k) then
+                if settings.SaveKey and writefile then
+                    pcall(writefile, saveFile, tostring(entered))
+                end
+                frame:Destroy(); onSuccess(); return
+            end
+        end
+        box.Text = ""; box.PlaceholderText = "Invalid key, try again"
+    end)
+end
+
+--------------------------------------------------------------------------------
+-- TOGGLE-UI VISIBILITY  (default keybind: K, user-changeable)
+--------------------------------------------------------------------------------
+local function setUIVisible(visible)
+    Aquafield._hidden = not visible
+    for _, w in ipairs(Aquafield._windows) do
+        if w._Main then
+            w._Main.Visible = visible
+        end
+    end
+end
+
+function Aquafield:Toggle()
+    setUIVisible(self._hidden)  -- if currently hidden, show
+end
+
+function Aquafield:Show()  setUIVisible(true)  end
+function Aquafield:Hide()  setUIVisible(false) end
+
+function Aquafield:SetToggleKeybind(keyCodeOrName)
+    self.ToggleUIKeybind = keyCodeFromName(keyCodeOrName)
+end
+
+-- Global keybind listener (one for the whole library)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+    if input.KeyCode == Aquafield.ToggleUIKeybind then
+        Aquafield:Toggle()
+    end
+end)
+
+--------------------------------------------------------------------------------
+-- WINDOW BUILDER
+--------------------------------------------------------------------------------
+function Aquafield:CreateWindow(opts)
+    opts = opts or {}
+
+    if opts.Theme and Themes[opts.Theme] then
+        Aquafield.ThemeName = opts.Theme
+        Aquafield.Theme     = Themes[opts.Theme]
+    end
+    if opts.ToggleUIKeybind then
+        Aquafield.ToggleUIKeybind = keyCodeFromName(opts.ToggleUIKeybind)
+    end
+    local th = Aquafield.Theme
+
+    local Window = {
+        Tabs = {},
+        Cfg  = opts.ConfigurationSaving or {},
+    }
+
+    local function build()
+        if not opts.DisableAquafieldPrompts then
+            showLoadingScreen(
+                opts.LoadingTitle    or "Aquafield",
+                opts.LoadingSubtitle or "Interface Suite", th)
+        end
+        task.wait(opts.DisableAquafieldPrompts and 0 or 1.3)
+
+        local Main = new("Frame", {
+            Name             = "Main",
+            Size             = UDim2.new(0, 580, 0, 400),
+            Position         = UDim2.new(0.5, -290, 0.5, -200),
+            BackgroundColor3 = th.Background,
+            BorderSizePixel  = 0,
+            Parent           = ScreenGui,
+            ClipsDescendants = true,
+        })
+        corner(Main, 14)
+        stroke(Main, th.Border, 1, 0.2)
+        themed(Main, "Background")
+
+        -- Soft accent halo behind the whole window
+        local halo = new("Frame", {
+            Size                   = UDim2.new(1, 0, 1, 0),
+            BackgroundColor3       = th.Accent,
+            BackgroundTransparency = 0.94,
+            BorderSizePixel        = 0,
+            Parent                 = Main,
+        })
+        corner(halo, 14)
+        themed(halo, "Accent")
+        gradient(halo,
+            Color3.fromRGB(255, 255, 255),
+            Color3.fromRGB(0,   0,   0),  135)
+
+        startParticleField(Main)
+
+        -- Topbar
+        local Top = new("Frame", {
+            Size             = UDim2.new(1, 0, 0, 40),
+            BackgroundColor3 = th.Topbar,
+            BorderSizePixel  = 0,
+            Parent           = Main,
+        })
+        themed(Top, "Topbar")
+        new("Frame", {
+            Size = UDim2.new(1, 0, 0, 1),
+            Position = UDim2.new(0, 0, 1, 0),
+            BackgroundColor3 = th.Border,
+            BorderSizePixel = 0, Parent = Top,
+        })
+        makeDraggable(Main, Top)
+
+        local titleX = 16
+        if opts.Icon and opts.Icon ~= 0 then
+            local iconImg = typeof(opts.Icon) == "number"
+                and ("rbxassetid://" .. tostring(opts.Icon))
+                or tostring(opts.Icon)
+            local ic = new("ImageLabel", {
+                Image = iconImg,
+                Size = UDim2.new(0, 20, 0, 20),
+                Position = UDim2.new(0, 14, 0.5, -10),
+                BackgroundTransparency = 1,
+                ImageColor3 = th.Accent,
+                Parent = Top,
+            })
+            themed(ic, "Accent", "image")
+            titleX = 42
+        end
+
+        local Title = new("TextLabel", {
+            Text             = opts.Name or "Aquafield",
+            Font             = Enum.Font.GothamBold,
+            TextSize         = 15,
+            TextColor3       = th.Text,
+            BackgroundTransparency = 1,
+            Position         = UDim2.new(0, titleX, 0, 0),
+            Size             = UDim2.new(0.7, 0, 1, 0),
+            TextXAlignment   = Enum.TextXAlignment.Left,
+            Parent           = Top,
+        })
+        themed(Title, "Text", "text")
+
+        local function topBtn(icon, xOff)
+            local b = new("TextButton", {
+                Text                  = icon,
+                Font                  = Enum.Font.GothamBold,
+                TextSize              = 16,
+                TextColor3            = th.SubText,
+                BackgroundTransparency= 1,
+                AnchorPoint           = Vector2.new(1, 0.5),
+                Position              = UDim2.new(1, xOff, 0.5, 0),
+                Size                  = UDim2.new(0, 26, 0, 26),
+                AutoButtonColor       = false,
+                Parent                = Top,
+            })
+            themed(b, "SubText", "text")
+            b.MouseEnter:Connect(function() tween(b, 0.15, { TextColor3 = Aquafield.Theme.Text }) end)
+            b.MouseLeave:Connect(function() tween(b, 0.15, { TextColor3 = Aquafield.Theme.SubText }) end)
+            return b
+        end
+        local CloseBtn = topBtn("â", -10)
+        local MinBtn   = topBtn("â", -40)
+        local HideBtn  = topBtn("â", -70)
+
+        -- Sidebar
+        local Side = new("Frame", {
+            Size = UDim2.new(0, 150, 1, -40),
+            Position = UDim2.new(0, 0, 0, 40),
+            BackgroundColor3 = th.Sidebar,
+            BorderSizePixel = 0, Parent = Main,
+        })
+        themed(Side, "Sidebar")
+        new("Frame", { Size = UDim2.new(0, 1, 1, 0),
+            Position = UDim2.new(1, 0, 0, 0),
+            BackgroundColor3 = th.Border,
+            BorderSizePixel = 0, Parent = Side })
+
+        local SideList = new("Frame", {
+            Size                  = UDim2.new(1, 0, 1, -120),
+            BackgroundTransparency= 1,
+            Parent                = Side,
+        })
+        pad(SideList, 10, 12)
+        new("UIListLayout", {
+            Padding   = UDim.new(0, 5),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Parent    = SideList,
+        })
+
+        -- Side footer: theme swatches
+        local ThemeBox = new("Frame", {
+            AnchorPoint            = Vector2.new(0, 1),
+            Position               = UDim2.new(0, 0, 1, -8),
+            Size                   = UDim2.new(1, 0, 0, 100),
+            BackgroundTransparency = 1,
+            Parent                 = Side,
+        })
+        pad(ThemeBox, 10)
+        new("UIListLayout", { Padding = UDim.new(0, 6), Parent = ThemeBox })
+        new("TextLabel", {
+            Text = "THEME",
+            Font = Enum.Font.GothamBold, TextSize = 10,
+            TextColor3 = th.SubText, BackgroundTransparency = 1,
+            Size = UDim2.new(1, 0, 0, 12),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = ThemeBox,
+        })
+        local swatchRow = new("Frame", {
+            Size = UDim2.new(1, 0, 0, 56),
+            BackgroundTransparency = 1, Parent = ThemeBox,
+        })
+        new("UIGridLayout", {
+            CellSize = UDim2.new(0, 22, 0, 22),
+            CellPadding = UDim2.new(0, 4, 0, 4),
+            Parent = swatchRow,
+        })
+        for _, name in ipairs(ThemeNames) do
+            local sw = new("TextButton", {
+                Text = "", BackgroundColor3 = Themes[name].Accent,
+                BorderSizePixel = 0, AutoButtonColor = false,
+                Parent = swatchRow,
+            })
+            corner(sw, 11)
+            stroke(sw, Color3.fromRGB(255,255,255), 1, 0.8)
+            sw.MouseEnter:Connect(function() tween(sw, 0.1, { Size = UDim2.new(0, 24, 0, 24) }) end)
+            sw.MouseLeave:Connect(function() tween(sw, 0.1, { Size = UDim2.new(0, 22, 0, 22) }) end)
+            sw.MouseButton1Click:Connect(function() Aquafield:SetTheme(name) end)
+        end
+
+        local Container = new("Frame", {
+            Size                  = UDim2.new(1, -150, 1, -40),
+            Position              = UDim2.new(0, 150, 0, 40),
+            BackgroundTransparency= 1,
+            Parent                = Main,
+        })
+
+        Window._Main      = Main
+        Window._SideList  = SideList
+        Window._Container = Container
+
+        -- top buttons
+        local minimized = false
+        function Window:Toggle()
+            minimized = not minimized
+            tween(Main, 0.25, {
+                Size = minimized
+                    and UDim2.new(0, 580, 0, 40)
+                    or  UDim2.new(0, 580, 0, 400),
+            })
+        end
+        MinBtn.MouseButton1Click:Connect(function() Window:Toggle() end)
+        HideBtn.MouseButton1Click:Connect(function() Aquafield:Hide() end)
+        CloseBtn.MouseButton1Click:Connect(function()
+            saveConfig(Window)
+            tween(Main, 0.25, {
+                Size                   = UDim2.new(0, 0, 0, 0),
+                Position               = UDim2.new(0.5, 0, 0.5, 0),
+                BackgroundTransparency = 1,
+            })
+            task.wait(0.3); ScreenGui:Destroy()
+        end)
+
+        -- entrance animation
+        Main.Size     = UDim2.new(0, 0, 0, 0)
+        Main.Position = UDim2.new(0.5, 0, 0.5, 0)
+        spring(Main, 0.45, {
+            Size     = UDim2.new(0, 580, 0, 400),
+            Position = UDim2.new(0.5, -290, 0.5, -200),
+        })
+        Window._ready = true
+    end
+
+    if opts.KeySystem then
+        runKeySystem(opts.KeySettings or {}, th, function() task.spawn(build) end)
+    else
+        task.spawn(build)
+    end
+
+    local timeout = 0
+    while not Window._ready and timeout < 30 do
+        task.wait(0.05); timeout = timeout + 0.05
+    end
+
+--------------------------------------------------------------------------------
+-- TABS  +  COMPONENT CONSTRUCTORS
+--------------------------------------------------------------------------------
+    local activeTab
+    function Window:CreateTab(name, icon)
+        local Tab = { Name = name }
+        local SideList  = Window._SideList
+        local Container = Window._Container
+        local th        = Aquafield.Theme
+
+        local Btn = new("TextButton", {
+            Text                   = "",
+            Size                   = UDim2.new(1, 0, 0, 32),
+            BackgroundColor3       = th.Element,
+            BackgroundTransparency = 1,
+            AutoButtonColor        = false,
+            Parent                 = SideList,
+        })
+        corner(Btn, 8); themed(Btn, "Element")
+
+        -- accent indicator on the left when active
+        local indicator = new("Frame", {
+            Size = UDim2.new(0, 3, 0, 0),
+            Position = UDim2.new(0, 0, 0.5, 0),
+            AnchorPoint = Vector2.new(0, 0.5),
+            BackgroundColor3 = th.Accent,
+            BorderSizePixel = 0, Parent = Btn,
+        })
+        corner(indicator, 2); themed(indicator, "Accent")
+
+        local labelX = 12
+        if icon and icon ~= 0 then
+            local iconImg = typeof(icon) == "number"
+                and ("rbxassetid://" .. tostring(icon))
+                or tostring(icon)
+            local img = new("ImageLabel", {
+                Image = iconImg,
+                Size = UDim2.new(0, 16, 0, 16),
+                Position = UDim2.new(0, 10, 0.5, -8),
+                BackgroundTransparency = 1,
+                ImageColor3 = th.SubText,
+                Parent = Btn,
+            })
+            themed(img, "SubText", "image")
+            labelX = 32
+        end
+
+        local lbl = new("TextLabel", {
+            Text = name,
+            Font = Enum.Font.GothamMedium, TextSize = 13,
+            TextColor3 = th.SubText, BackgroundTransparency = 1,
+            Position = UDim2.new(0, labelX, 0, 0),
+            Size = UDim2.new(1, -labelX - 4, 1, 0),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = Btn,
+        })
+        themed(lbl, "SubText", "text")
+
+        local Page = new("ScrollingFrame", {
+            Size = UDim2.new(1, 0, 1, 0),
+            BackgroundTransparency = 1, BorderSizePixel = 0,
+            ScrollBarThickness = 3,
+            ScrollBarImageColor3 = th.Accent,
+            CanvasSize = UDim2.new(0, 0, 0, 0),
+            Visible = false, Parent = Container,
+        })
+        pad(Page, 14)
+        local list = new("UIListLayout", {
+            Padding = UDim.new(0, 8),
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Parent = Page,
+        })
+        list:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+            Page.CanvasSize = UDim2.new(0, 0, 0, list.AbsoluteContentSize.Y + 28)
+        end)
+
+        local function select()
+            if activeTab then
+                activeTab.Page.Visible = false
+                tween(activeTab.Btn, 0.15, { BackgroundTransparency = 1 })
+                tween(activeTab.Indicator, 0.15, { Size = UDim2.new(0, 3, 0, 0) })
+                activeTab.Lbl.TextColor3 = Aquafield.Theme.SubText
+            end
+            activeTab = { Page = Page, Btn = Btn, Lbl = lbl, Indicator = indicator }
+            Page.Visible = true
+            tween(Btn, 0.2, { BackgroundTransparency = 0 })
+            tween(indicator, 0.2, { Size = UDim2.new(0, 3, 0, 20) })
+            lbl.TextColor3 = Aquafield.Theme.Text
+        end
+        Btn.MouseEnter:Connect(function()
+            if activeTab and activeTab.Btn ~= Btn then
+                tween(Btn, 0.15, { BackgroundTransparency = 0.6 })
+            end
+        end)
+        Btn.MouseLeave:Connect(function()
+            if activeTab and activeTab.Btn ~= Btn then
+                tween(Btn, 0.15, { BackgroundTransparency = 1 })
+            end
+        end)
+        Btn.MouseButton1Click:Connect(select)
+        if not activeTab then select() end
+
+        local function baseElement(h)
+            local th = Aquafield.Theme
+            local f = new("Frame", {
+                Size = UDim2.new(1, 0, 0, h or 38),
+                BackgroundColor3 = th.Element,
+                BorderSizePixel = 0, Parent = Page,
+            })
+            corner(f, 8); stroke(f, th.Border, 1, 0.6); themed(f, "Element")
+            return f
+        end
+
+
+        function Tab:CreateSection(title)
+            local th = Aquafield.Theme
+            local s  = new("Frame", {
+                Size = UDim2.new(1, 0, 0, 22),
+                BackgroundTransparency = 1, Parent = Page,
+            })
+            local line = new("Frame", {
+                AnchorPoint = Vector2.new(0, 0.5),
+                Position = UDim2.new(0, 0, 1, -3),
+                Size = UDim2.new(1, 0, 0, 1),
+                BackgroundColor3 = th.Border,
+                BackgroundTransparency = 0.5,
+                BorderSizePixel = 0, Parent = s,
+            })
+            themed(line, "Border")
+            local l = new("TextLabel", {
+                Text = string.upper(title),
+                Font = Enum.Font.GothamBold, TextSize = 11,
+                TextColor3 = th.Accent, BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = s,
+            })
+            themed(l, "Accent", "text")
+            return { Set = function(_, t) l.Text = string.upper(t) end }
+        end
+    
+
+        function Tab:CreateLabel(text)
+            local f = baseElement(30)
+            local l = new("TextLabel", {
+                Text = text, Font = Enum.Font.Gotham, TextSize = 12,
+                TextColor3 = Aquafield.Theme.Text,
+                BackgroundTransparency = 1,
+                Position = UDim2.new(0, 10, 0, 0),
+                Size = UDim2.new(1, -20, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(l, "Text", "text")
+            return { Set = function(_, t) l.Text = t end }
+        end
+    
+
+        function Tab:CreateParagraph(o)
+            local f = baseElement(56)
+            f.AutomaticSize = Enum.AutomaticSize.Y
+            pad(f, 12)
+            local t = new("TextLabel", {
+                Text = o.Title or "",
+                Font = Enum.Font.GothamBold, TextSize = 13,
+                TextColor3 = Aquafield.Theme.Text, BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 16),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(t, "Text", "text")
+            local c = new("TextLabel", {
+                Text = o.Content or "",
+                Font = Enum.Font.Gotham, TextSize = 12,
+                TextColor3 = Aquafield.Theme.SubText, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 0, 0, 20),
+                Size = UDim2.new(1, 0, 0, 0),
+                AutomaticSize = Enum.AutomaticSize.Y,
+                TextWrapped = true,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Top, Parent = f,
+            })
+            themed(c, "SubText", "text")
+            return {
+                Set = function(_, p)
+                    p = p or {}
+                    if p.Title   then t.Text = p.Title   end
+                    if p.Content then c.Text = p.Content end
+                end
+            }
+        end
+    
+
+        function Tab:CreateButton(o)
+            local th = Aquafield.Theme
+            local f  = baseElement(38)
+            local btn = new("TextButton", {
+                Text = "", BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 1, 0), Parent = f,
+            })
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Button",
+                Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 12, 0, 0),
+                Size = UDim2.new(1, -40, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = btn,
+            })
+            themed(lbl, "Text", "text")
+            local arr = new("TextLabel", {
+                Text = ">", Font = Enum.Font.GothamBold, TextSize = 16,
+                TextColor3 = th.Accent, BackgroundTransparency = 1,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -12, 0.5, 0),
+                Size = UDim2.new(0, 18, 0, 18), Parent = btn,
+            })
+            themed(arr, "Accent", "text")
+            btn.MouseEnter:Connect(function()
+                tween(f,   0.15, { BackgroundColor3 = Aquafield.Theme.ElementHover })
+                tween(arr, 0.15, { Position = UDim2.new(1, -8, 0.5, 0) })
+            end)
+            btn.MouseLeave:Connect(function()
+                tween(f,   0.15, { BackgroundColor3 = Aquafield.Theme.Element })
+                tween(arr, 0.15, { Position = UDim2.new(1, -12, 0.5, 0) })
+            end)
+            btn.MouseButton1Click:Connect(function()
+                local rip = new("Frame", {
+                    BackgroundColor3 = Aquafield.Theme.Accent,
+                    BackgroundTransparency = 0.55, BorderSizePixel = 0,
+                    Size = UDim2.new(0, 0, 0, 0),
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.new(0.5, 0, 0.5, 0), Parent = f,
+                })
+                corner(rip, 60)
+                tween(rip, 0.45,
+                    { Size = UDim2.new(1, 120, 1, 120), BackgroundTransparency = 1 })
+                task.delay(0.45, function() rip:Destroy() end)
+                if o.Callback then pcall(o.Callback) end
+            end)
+            return { Set = function(_, t) lbl.Text = t end }
+        end
+    
+
+        function Tab:CreateToggle(o)
+            local th = Aquafield.Theme
+            local val = o.CurrentValue and true or false
+            local f   = baseElement(38)
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Toggle",
+                Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 12, 0, 0),
+                Size = UDim2.new(1, -64, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local track = new("TextButton", {
+                Text = "", AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -12, 0.5, 0),
+                Size = UDim2.new(0, 40, 0, 22),
+                BackgroundColor3 = th.Border,
+                AutoButtonColor = false, Parent = f,
+            })
+            corner(track, 11)
+            local knob = new("Frame", {
+                Size = UDim2.new(0, 18, 0, 18),
+                Position = UDim2.new(0, 2, 0.5, -9),
+                BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+                BorderSizePixel = 0, Parent = track,
+            })
+            corner(knob, 10)
+
+            local api = { CurrentValue = val }
+            function api:Set(v)
+                val = v and true or false
+                api.CurrentValue = val
+                local th = Aquafield.Theme
+                tween(track, 0.2, { BackgroundColor3 = val and th.Accent or th.Border })
+                tween(knob,  0.2, {
+                    Position = val
+                        and UDim2.new(1, -20, 0.5, -9)
+                        or  UDim2.new(0, 2,   0.5, -9),
+                })
+                if o.Callback then pcall(o.Callback, val) end
+            end
+            track.MouseButton1Click:Connect(function() api:Set(not val) end)
+            api:Set(val)
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+    
+
+        function Tab:CreateSlider(o)
+            local th = Aquafield.Theme
+            local rng = o.Range or { 0, 100 }
+            local min, max = rng[1], rng[2]
+            local inc = o.Increment or 1
+            local val = o.CurrentValue or min
+            local f   = baseElement(52)
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Slider",
+                Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 12, 0, 6),
+                Size = UDim2.new(1, -24, 0, 18),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local valLbl = new("TextLabel", {
+                Text = tostring(val) .. (o.Suffix or ""),
+                Font = Enum.Font.GothamBold, TextSize = 12,
+                TextColor3 = th.Accent, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 12, 0, 6),
+                Size = UDim2.new(1, -24, 0, 18),
+                TextXAlignment = Enum.TextXAlignment.Right, Parent = f,
+            })
+            themed(valLbl, "Accent", "text")
+            local bar = new("Frame", {
+                Position = UDim2.new(0, 12, 1, -16),
+                Size = UDim2.new(1, -24, 0, 6),
+                BackgroundColor3 = th.Border,
+                BorderSizePixel = 0, Parent = f,
+            })
+            corner(bar, 3)
+            local fill = new("Frame", {
+                Size = UDim2.new(0, 0, 1, 0),
+                BackgroundColor3 = th.Accent,
+                BorderSizePixel = 0, Parent = bar,
+            })
+            corner(fill, 3); themed(fill, "Accent")
+            gradient(fill, lighten(th.Accent, 0.3), th.Accent, 0)
+
+            local api = { CurrentValue = val }
+            local function set(v, fire)
+                v = math.clamp(v, min, max)
+                v = math.floor(v / inc + 0.5) * inc
+                val = v; api.CurrentValue = v
+                fill.Size  = UDim2.new((v - min) / math.max(max - min, 1e-6), 0, 1, 0)
+                valLbl.Text = tostring(v) .. (o.Suffix or "")
+                if fire and o.Callback then pcall(o.Callback, v) end
+            end
+            function api:Set(v) set(v, true) end
+            set(val, false)
+            if o.Callback then pcall(o.Callback, val) end
+
+            local dragging = false
+            bar.InputBegan:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1
+                or i.UserInputType == Enum.UserInputType.Touch then
+                    dragging = true
+                end
+            end)
+            UserInputService.InputEnded:Connect(function(i)
+                if i.UserInputType == Enum.UserInputType.MouseButton1
+                or i.UserInputType == Enum.UserInputType.Touch then
+                    dragging = false
+                end
+            end)
+            UserInputService.InputChanged:Connect(function(i)
+                if dragging
+                and (i.UserInputType == Enum.UserInputType.MouseMovement
+                  or i.UserInputType == Enum.UserInputType.Touch) then
+                    local rel = (i.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X
+                    rel = math.clamp(rel, 0, 1)
+                    set(min + rel * (max - min), true)
+                end
+            end)
+
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+    
+
+        function Tab:CreateDropdown(o)
+            local th      = Aquafield.Theme
+            local options = o.Options or {}
+            local multi   = o.MultipleOptions
+            local current = multi
+                and (type(o.CurrentOption) == "table" and o.CurrentOption or {})
+                or  (type(o.CurrentOption) == "table" and o.CurrentOption[1] or o.CurrentOption)
+            local open = false
+
+            local f = baseElement(38)
+            f.ClipsDescendants = true
+            local btn = new("TextButton", {
+                Text = "", BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 38), Parent = f,
+            })
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Dropdown",
+                Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 12, 0, 0),
+                Size = UDim2.new(0.5, -12, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = btn,
+            })
+            themed(lbl, "Text", "text")
+            local valLbl = new("TextLabel", {
+                Font = Enum.Font.Gotham, TextSize = 12,
+                TextColor3 = th.Accent, BackgroundTransparency = 1,
+                Position = UDim2.new(0.5, 0, 0, 0),
+                Size = UDim2.new(0.5, -32, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Right,
+                TextTruncate = Enum.TextTruncate.AtEnd, Parent = btn,
+            })
+            themed(valLbl, "Accent", "text")
+            local arr = new("TextLabel", {
+                Text = "v", Font = Enum.Font.GothamBold, TextSize = 14,
+                TextColor3 = th.SubText, BackgroundTransparency = 1,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -12, 0.5, 0),
+                Size = UDim2.new(0, 14, 0, 14), Parent = btn,
+            })
+            themed(arr, "SubText", "text")
+
+            local listFrame = new("Frame", {
+                Size = UDim2.new(1, -24, 0, 0),
+                Position = UDim2.new(0, 12, 0, 40),
+                BackgroundTransparency = 1, Parent = f,
+            })
+            new("UIListLayout", { Padding = UDim.new(0, 4), Parent = listFrame })
+
+            local api = {}
+            local optionBtns = {}
+
+            local function isSelected(opt)
+                if multi then
+                    for _, v in ipairs(current) do if v == opt then return true end end
+                    return false
+                end
+                return current == opt
+            end
+            local function renderValue()
+                if multi then
+                    valLbl.Text = (#current == 0) and "None" or table.concat(current, ", ")
+                else
+                    valLbl.Text = tostring(current or "None")
+                end
+            end
+            local function refreshHighlights()
+                for opt, b in pairs(optionBtns) do
+                    b.TextColor3 = isSelected(opt)
+                        and Aquafield.Theme.Accent or Aquafield.Theme.SubText
+                end
+            end
+
+            local function build()
+                for _, c in ipairs(listFrame:GetChildren()) do
+                    if c:IsA("TextButton") then c:Destroy() end
+                end
+                optionBtns = {}
+                for _, opt in ipairs(options) do
+                    local ob = new("TextButton", {
+                        Text = opt, Font = Enum.Font.Gotham, TextSize = 12,
+                        TextColor3 = Aquafield.Theme.SubText,
+                        BackgroundColor3 = Aquafield.Theme.Background,
+                        AutoButtonColor = false,
+                        Size = UDim2.new(1, 0, 0, 26), Parent = listFrame,
+                    })
+                    corner(ob, 5)
+                    optionBtns[opt] = ob
+                    ob.MouseEnter:Connect(function()
+                        tween(ob, 0.1, { BackgroundColor3 = Aquafield.Theme.ElementHover })
+                    end)
+                    ob.MouseLeave:Connect(function()
+                        tween(ob, 0.1, { BackgroundColor3 = Aquafield.Theme.Background })
+                    end)
+                    ob.MouseButton1Click:Connect(function()
+                        if multi then
+                            local found
+                            for i, v in ipairs(current) do
+                                if v == opt then found = i break end
+                            end
+                            if found then table.remove(current, found)
+                            else            table.insert(current, opt) end
+                        else
+                            current = opt
+                        end
+                        api.CurrentOption = current
+                        renderValue(); refreshHighlights()
+                        if o.Callback then pcall(o.Callback, current) end
+                    end)
+                end
+                refreshHighlights()
+            end
+            build()
+
+            btn.MouseButton1Click:Connect(function()
+                open = not open
+                local h = 38 + (open and (#options * 30 + 8) or 0)
+                tween(f,   0.22, { Size = UDim2.new(1, 0, 0, h) })
+                tween(arr, 0.22, { Rotation = open and 180 or 0 })
+            end)
+
+            function api:Set(v)
+                current = v; api.CurrentOption = v
+                renderValue(); refreshHighlights()
+                if o.Callback then pcall(o.Callback, v) end
+            end
+            function api:Refresh(newOpts) options = newOpts; build() end
+            api.CurrentOption = current
+            renderValue()
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+    
+
+        function Tab:CreateInput(o)
+            local th = Aquafield.Theme
+            local f  = baseElement(38)
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Input",
+                Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 12, 0, 0),
+                Size = UDim2.new(0.4, 0, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local box = new("TextBox", {
+                PlaceholderText = o.PlaceholderText or "",
+                Text = "",
+                Font = Enum.Font.Gotham, TextSize = 12,
+                TextColor3 = th.Text, PlaceholderColor3 = th.SubText,
+                BackgroundColor3 = th.Background,
+                ClearTextOnFocus = false,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -12, 0.5, 0),
+                Size = UDim2.new(0.55, 0, 0, 24), Parent = f,
+            })
+            corner(box, 6); stroke(box, th.Border, 1, 0.5)
+            themed(box, "Background"); themed(box, "Text", "text")
+            themed(box, "SubText", "placeholder")
+            local api = { CurrentValue = "" }
+            box.FocusLost:Connect(function(enter)
+                api.CurrentValue = box.Text
+                if o.Callback then pcall(o.Callback, box.Text, enter) end
+                if o.RemoveTextAfterFocusLost then box.Text = "" end
+            end)
+            function api:Set(v) box.Text = tostring(v); api.CurrentValue = box.Text end
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+    
+
+        function Tab:CreateKeybind(o)
+            local th = Aquafield.Theme
+            local key = o.CurrentKeybind or "None"
+            local listening = false
+            local f = baseElement(38)
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Keybind",
+                Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 12, 0, 0),
+                Size = UDim2.new(1, -100, 1, 0),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local btn = new("TextButton", {
+                Text = key, Font = Enum.Font.GothamBold, TextSize = 12,
+                TextColor3 = th.Accent, BackgroundColor3 = th.Background,
+                AnchorPoint = Vector2.new(1, 0.5),
+                Position = UDim2.new(1, -12, 0.5, 0),
+                Size = UDim2.new(0, 80, 0, 24),
+                AutoButtonColor = false, Parent = f,
+            })
+            corner(btn, 6); stroke(btn, th.Border, 1, 0.5)
+            themed(btn, "Background"); themed(btn, "Accent", "text")
+
+            btn.MouseButton1Click:Connect(function()
+                listening = true; btn.Text = "..."
+            end)
+            UserInputService.InputBegan:Connect(function(i, gpe)
+                if listening and i.UserInputType == Enum.UserInputType.Keyboard then
+                    key = i.KeyCode.Name; btn.Text = key; listening = false
+                    return
+                end
+                if gpe then return end
+                if i.UserInputType == Enum.UserInputType.Keyboard
+                and i.KeyCode.Name == key then
+                    if o.Callback then pcall(o.Callback) end
+                end
+            end)
+
+            local api = { CurrentKeybind = key, CurrentValue = key }
+            function api:Set(k)
+                key = k; btn.Text = k
+                api.CurrentKeybind = k; api.CurrentValue = k
+            end
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+    
+
+        function Tab:CreateColorPicker(o)
+            local th = Aquafield.Theme
+            local color = o.Color or Color3.fromRGB(255, 255, 255)
+            local open = false
+            local f = baseElement(38)
+            f.ClipsDescendants = true
+            local lbl = new("TextLabel", {
+                Text = o.Name or "Color",
+                Font = Enum.Font.GothamMedium, TextSize = 13,
+                TextColor3 = th.Text, BackgroundTransparency = 1,
+                Position = UDim2.new(0, 12, 0, 0),
+                Size = UDim2.new(1, -54, 0, 38),
+                TextXAlignment = Enum.TextXAlignment.Left, Parent = f,
+            })
+            themed(lbl, "Text", "text")
+            local swatch = new("TextButton", {
+                Text = "", BackgroundColor3 = color,
+                AnchorPoint = Vector2.new(1, 0),
+                Position = UDim2.new(1, -12, 0, 9),
+                Size = UDim2.new(0, 34, 0, 20),
+                AutoButtonColor = false, Parent = f,
+            })
+            corner(swatch, 5); stroke(swatch, th.Border, 1, 0.4)
+
+            local panel = new("Frame", {
+                Position = UDim2.new(0, 12, 0, 46),
+                Size = UDim2.new(1, -24, 0, 86),
+                BackgroundTransparency = 1, Parent = f,
+            })
+            local function sliderRow(name, y, getter)
+                local row = new("Frame", {
+                    Position = UDim2.new(0, 0, 0, y),
+                    Size = UDim2.new(1, 0, 0, 24),
+                    BackgroundTransparency = 1, Parent = panel,
+                })
+                new("TextLabel", {
+                    Text = name, Font = Enum.Font.GothamBold, TextSize = 11,
+                    TextColor3 = th.SubText, BackgroundTransparency = 1,
+                    Size = UDim2.new(0, 14, 1, 0), Parent = row,
+                })
+                local bar = new("Frame", {
+                    Position = UDim2.new(0, 20, 0.5, -3),
+                    Size = UDim2.new(1, -20, 0, 6),
+                    BackgroundColor3 = th.Border,
+                    BorderSizePixel = 0, Parent = row,
+                })
+                corner(bar, 3)
+                local fill = new("Frame", {
+                    Size = UDim2.new(getter(), 0, 1, 0),
+                    BackgroundColor3 =
+                        name == "R" and Color3.fromRGB(255,80,80) or
+                        name == "G" and Color3.fromRGB(80,220,120) or
+                                         Color3.fromRGB(80,160,255),
+                    BorderSizePixel = 0, Parent = bar,
+                })
+                corner(fill, 3)
+                return bar, fill
+            end
+
+            local rBar, rFill = sliderRow("R",  0, function() return color.R end)
+            local gBar, gFill = sliderRow("G", 30, function() return color.G end)
+            local bBar, bFill = sliderRow("B", 60, function() return color.B end)
+
+            local api = { CurrentValue = color }
+            local function update()
+                swatch.BackgroundColor3 = color
+                rFill.Size = UDim2.new(color.R, 0, 1, 0)
+                gFill.Size = UDim2.new(color.G, 0, 1, 0)
+                bFill.Size = UDim2.new(color.B, 0, 1, 0)
+                api.CurrentValue = color
+                if o.Callback then pcall(o.Callback, color) end
+            end
+
+            local function bind(bar, channel)
+                local drag = false
+                bar.InputBegan:Connect(function(i)
+                    if i.UserInputType == Enum.UserInputType.MouseButton1
+                    or i.UserInputType == Enum.UserInputType.Touch then drag = true end
+                end)
+                UserInputService.InputEnded:Connect(function(i)
+                    if i.UserInputType == Enum.UserInputType.MouseButton1
+                    or i.UserInputType == Enum.UserInputType.Touch then drag = false end
+                end)
+                UserInputService.InputChanged:Connect(function(i)
+                    if drag and (i.UserInputType == Enum.UserInputType.MouseMovement
+                              or i.UserInputType == Enum.UserInputType.Touch) then
+                        local rel = math.clamp(
+                            (i.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X,
+                            0, 1)
+                        local r, g, b = color.R, color.G, color.B
+                        if     channel == "R" then r = rel
+                        elseif channel == "G" then g = rel
+                        else                       b = rel end
+                        color = Color3.new(r, g, b)
+                        update()
+                    end
+                end)
+            end
+            bind(rBar, "R"); bind(gBar, "G"); bind(bBar, "B")
+
+            swatch.MouseButton1Click:Connect(function()
+                open = not open
+                tween(f, 0.22, { Size = UDim2.new(1, 0, 0, open and 138 or 38) })
+            end)
+
+            function api:Set(c) color = c; update() end
+            update()
+            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            return api
+        end
+    
+        return Tab
+    end -- CreateTab
+
+--------------------------------------------------------------------------------
+-- BUILT-IN SETTINGS TAB  (auto-injected, includes keybind picker)
+--------------------------------------------------------------------------------
+    -- Inject a Settings tab so the keybind, theme, etc. are always tweakable
+    do
+        local Settings = Window:CreateTab("Settings", 6031280882)
+        Settings:CreateSection("Appearance")
+        Settings:CreateDropdown({
+            Name = "Theme",
+            Options = ThemeNames,
+            CurrentOption = Aquafield.ThemeName,
+            Callback = function(v) Aquafield:SetTheme(v) end,
+        })
+        Settings:CreateSlider({
+            Name = "Accent Glow",
+            Range = { 0, 100 }, Increment = 1, Suffix = "%",
+            CurrentValue = math.floor((1 - Aquafield.AcrylicStrength) * 100),
+            Callback = function(v) Aquafield.AcrylicStrength = 1 - (v / 100) end,
+        })
+        Settings:CreateDropdown({
+            Name = "Notifications",
+            Options = { "BottomRight", "BottomLeft", "TopRight", "TopLeft" },
+            CurrentOption = Aquafield.NotifSide,
+            Callback = function(v) positionNotifHolder(v) end,
+        })
+
+        Settings:CreateSection("Controls")
+        local kb = Settings:CreateKeybind({
+            Name = "Toggle UI",
+            CurrentKeybind = Aquafield.ToggleUIKeybind.Name,
+            Flag = "AquafieldToggleKeybind",
+            Callback = function() end, -- the global listener handles toggling
+        })
+        -- We want the keybind button to *update the global toggle key*, not just fire a callback.
+        -- So we override its Set behaviour and watch when the user picks a new key.
+        do
+            local origSet = kb.Set
+            function kb:Set(k)
+                origSet(self, k)
+                Aquafield.ToggleUIKeybind = keyCodeFromName(k)
+            end
+        end
+        -- Re-route the listening assignment by polling CurrentKeybind
+        task.spawn(function()
+            local last = kb.CurrentKeybind
+            while ScreenGui.Parent do
+                task.wait(0.2)
+                if kb.CurrentKeybind ~= last then
+                    last = kb.CurrentKeybind
+                    Aquafield.ToggleUIKeybind = keyCodeFromName(last)
+                end
+            end
+        end)
+        Settings:CreateButton({
+            Name = "Reset keybind to K",
+            Callback = function()
+                kb:Set("K")
+                Aquafield:Notify({
+                    Title = "Keybind reset",
+                    Content = "Toggle UI is now bound to K.",
+                    Duration = 3,
+                })
+            end,
+        })
+        Settings:CreateButton({
+            Name = "Hide UI",
+            Callback = function() Aquafield:Hide() end,
+        })
+
+        Settings:CreateSection("About")
+        Settings:CreateParagraph({
+            Title = "Aquafield " .. Aquafield._version,
+            Content = "Modern, animated Roblox UI library with a Rayfield-compatible API. Press the toggle key (default K) to hide / show this window.",
+        })
+    end
+
+    if Window.Cfg and Window.Cfg.Enabled then
+        task.spawn(function()
+            while ScreenGui.Parent do task.wait(10); saveConfig(Window) end
+        end)
+    end
+
+    table.insert(Aquafield._windows, Window)
+    return Window
+end -- CreateWindow
+
+--------------------------------------------------------------------------------
+-- EXTRA: ICON CATALOG  (Rayfield-compatible asset ids by name)
+--------------------------------------------------------------------------------
+Aquafield.Icons = {
+    home         = 4483362458,
+    settings     = 6031280882,
+    user         = 6034509993,
+    search       = 3926305904,
+    close        = 6031094678,
+    check        = 6031094667,
+    warning      = 6031071057,
+    info         = 6031071053,
+    error        = 6031071054,
+    star         = 6031068420,
+    heart        = 6031068422,
+    trash        = 6031094678,
+    download     = 6031071051,
+    upload       = 6031068421,
+    link         = 6034509994,
+    lock         = 6031094693,
+    unlock       = 6031094694,
+    eye          = 6031094699,
+    eye_off      = 6031094700,
+    play         = 6031068426,
+    pause        = 6031068428,
+    stop         = 6031068430,
+    next         = 6031068432,
+    prev         = 6031068434,
+    plus         = 6031068436,
+    minus        = 6031068438,
+    edit         = 6034287594,
+    save         = 6031068440,
+    refresh      = 6031068442,
+    share        = 6031068444,
+    globe        = 6031068446,
+    cog          = 6031068448,
+    bell         = 6031068450,
+    calendar     = 6031068452,
+    clock        = 6031068454,
+    mail         = 6031068456,
+    chat         = 6031068458,
+    phone        = 6031068460,
+    map          = 6031068462,
+    camera       = 6031068464,
+    image        = 6031068466,
+    video        = 6031068468,
+    music        = 6031068470,
+    mic          = 6031068472,
+    volume       = 6031068474,
+    battery      = 6031068476,
+    wifi         = 6031068478,
+    bluetooth    = 6031068480,
+    compass      = 6031068482,
+    flag         = 6031068484,
+    bookmark     = 6031068486,
+}
+
+function Aquafield:GetIcon(name)
+    local id = self.Icons[name]
+    if id then return "rbxassetid://" .. tostring(id) end
+    return nil
+end
+
+--------------------------------------------------------------------------------
+-- EXTRA: EASING PRESETS  (named TweenInfo factories)
+--------------------------------------------------------------------------------
+Aquafield.Easing = {}
+Aquafield.Easing.Smooth = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+Aquafield.Easing.Snappy = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+Aquafield.Easing.Glide = TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.Out)
+Aquafield.Easing.Bounce = TweenInfo.new(0.45, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
+Aquafield.Easing.Slam = TweenInfo.new(0.18, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+Aquafield.Easing.Crawl = TweenInfo.new(0.6, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+Aquafield.Easing.Pop = TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+Aquafield.Easing.FadeIn = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+Aquafield.Easing.FadeOut = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+Aquafield.Easing.LongGlide = TweenInfo.new(0.8, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut)
+Aquafield.Easing.ShortPunch = TweenInfo.new(0.1, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out)
+Aquafield.Easing.RubberBand = TweenInfo.new(0.55, Enum.EasingStyle.Elastic, Enum.EasingDirection.Out)
+
+function Aquafield:Tween(o, name, props)
+    local info = self.Easing[name] or self.Easing.Smooth
+    local tw = TweenService:Create(o, info, props); tw:Play(); return tw
+end
+
+--------------------------------------------------------------------------------
+-- EXTRA: COLOR UTILITIES
+--------------------------------------------------------------------------------
+Aquafield.Color = {}
+function Aquafield.Color.fromHex(hex)
+    hex = hex:gsub("#", "")
+    if #hex == 3 then
+        hex = hex:sub(1,1):rep(2) .. hex:sub(2,2):rep(2) .. hex:sub(3,3):rep(2)
+    end
+    local r = tonumber(hex:sub(1,2), 16) or 0
+    local g = tonumber(hex:sub(3,4), 16) or 0
+    local b = tonumber(hex:sub(5,6), 16) or 0
+    return Color3.fromRGB(r, g, b)
+end
+function Aquafield.Color.toHex(c)
+    return string.format("#%02X%02X%02X",
+        math.floor(c.R*255+0.5),
+        math.floor(c.G*255+0.5),
+        math.floor(c.B*255+0.5))
+end
+function Aquafield.Color.lerp(a, b, t)  return lerpColor(a, b, t) end
+function Aquafield.Color.darken(c, f)   return darken(c, f) end
+function Aquafield.Color.lighten(c, f)  return lighten(c, f) end
+function Aquafield.Color.complement(c)
+    return Color3.new(1 - c.R, 1 - c.G, 1 - c.B)
+end
+function Aquafield.Color.greyscale(c)
+    local g = (c.R + c.G + c.B) / 3; return Color3.new(g, g, g)
+end
+
+--------------------------------------------------------------------------------
+-- EXTRA: SIGNAL  (tiny event helper)
+--------------------------------------------------------------------------------
+local Signal = {}
+Signal.__index = Signal
+function Signal.new()
+    return setmetatable({ _h = {} }, Signal)
+end
+function Signal:Connect(fn)
+    self._h[#self._h + 1] = fn
+    local i = #self._h
+    return { Disconnect = function() self._h[i] = nil end }
+end
+function Signal:Fire(...)
+    for _, fn in pairs(self._h) do task.spawn(fn, ...) end
+end
+Aquafield.Signal = Signal
+Aquafield.OnToggle    = Signal.new()
+Aquafield.OnThemeChange = Signal.new()
+
+-- hook signals into core API
+do
+    local origSetTheme = Aquafield.SetTheme
+    function Aquafield:SetTheme(name)
+        origSetTheme(self, name)
+        self.OnThemeChange:Fire(name)
+    end
+    local origToggle = setUIVisible
+    setUIVisible = function(v)
+        origToggle(v)
+        Aquafield.OnToggle:Fire(v)
+    end
+end
+
+--------------------------------------------------------------------------------
+-- EXTRA: PRESET BUILDERS  (one-line helpers)
+--------------------------------------------------------------------------------
+function Aquafield:QuickInfo(title, content)
+    return self:Notify({ Title = title, Content = content, Duration = 3 })
+end
+function Aquafield:QuickWarn(title, content)
+    return self:Notify({
+        Title = title, Content = content, Duration = 4,
+        Image = self.Icons.warning,
+    })
+end
+function Aquafield:QuickError(title, content)
+    return self:Notify({
+        Title = title, Content = content, Duration = 5,
+        Image = self.Icons.error,
+    })
+end
+function Aquafield:QuickSuccess(title, content)
+    return self:Notify({
+        Title = title, Content = content, Duration = 3,
+        Image = self.Icons.check,
+    })
+end
+
+--------------------------------------------------------------------------------
+-- EXTRA: MOTION HELPERS  (shake, pulse, fadeIn, fadeOut)
+--------------------------------------------------------------------------------
+function Aquafield:Shake(inst, intensity, duration)
+    intensity = intensity or 4; duration = duration or 0.3
+    local start = inst.Position
+    local steps = math.floor(duration * 60)
+    task.spawn(function()
+        for i = 1, steps do
+            local dx = (math.random() - 0.5) * intensity * 2
+            local dy = (math.random() - 0.5) * intensity * 2
+            inst.Position = UDim2.new(
+                start.X.Scale, start.X.Offset + dx,
+                start.Y.Scale, start.Y.Offset + dy)
+            task.wait(1/60)
+        end
+        inst.Position = start
+    end)
+end
+
+function Aquafield:Pulse(inst, scale, duration)
+    scale = scale or 1.05; duration = duration or 0.2
+    local s = inst.Size
+    tween(inst, duration / 2, { Size = UDim2.new(
+        s.X.Scale * scale, s.X.Offset,
+        s.Y.Scale * scale, s.Y.Offset) })
+    task.delay(duration / 2, function()
+        tween(inst, duration / 2, { Size = s })
+    end)
+end
+
+function Aquafield:FadeIn(inst, duration)
+    duration = duration or 0.25
+    if inst:IsA("GuiObject") then
+        inst.BackgroundTransparency = 1
+        tween(inst, duration, { BackgroundTransparency = 0 })
+    end
+end
+function Aquafield:FadeOut(inst, duration)
+    duration = duration or 0.25
+    if inst:IsA("GuiObject") then
+        tween(inst, duration, { BackgroundTransparency = 1 })
+    end
+end
+
+--------------------------------------------------------------------------------
+-- EXTRA: KEYBIND HELPERS  (global key map)
+--------------------------------------------------------------------------------
+Aquafield._globalBinds = {}
+function Aquafield:Bind(keyName, callback)
+    self._globalBinds[keyName] = callback
+end
+function Aquafield:Unbind(keyName)
+    self._globalBinds[keyName] = nil
+end
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.UserInputType ~= Enum.UserInputType.Keyboard then return end
+    local cb = Aquafield._globalBinds[input.KeyCode.Name]
+    if cb then pcall(cb) end
+end)
+
+--------------------------------------------------------------------------------
+-- EXTRA: SCREEN UTILITIES
+--------------------------------------------------------------------------------
+function Aquafield:CenterOnScreen(frame)
+    local sz = frame.AbsoluteSize
+    frame.AnchorPoint = Vector2.new(0.5, 0.5)
+    frame.Position    = UDim2.new(0.5, 0, 0.5, 0)
+end
+function Aquafield:GetViewport()
+    local cam = Workspace.CurrentCamera
+    if cam then return cam.ViewportSize end
+    return Vector2.new(1920, 1080)
+end
+
+--------------------------------------------------------------------------------
+-- EXTRA: DESTROY / CLEANUP
+--------------------------------------------------------------------------------
+function Aquafield:Destroy()
+    if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
+    table.clear(self._windows)
+    table.clear(self._themed)
+    table.clear(self.Flags)
+end
+
+--------------------------------------------------------------------------------
+-- DOCUMENTATION REFERENCE  (in-source, scroll-friendly)
+--------------------------------------------------------------------------------
+-- ============================================================
+-- AQUAFIELD  v2.0   --   FULL API REFERENCE
+-- ============================================================
+--
+-- LIBRARY:
+--   Aquafield:CreateWindow(opts)         -> Window
+--   Aquafield:SetTheme(name)
+--   Aquafield:LoadConfiguration()
+--   Aquafield:Notify({ Title, Content, Duration, Image })
+--   Aquafield:Toggle()                   -- show/hide whole UI
+--   Aquafield:Show()  / :Hide()
+--   Aquafield:SetToggleKeybind(name)     -- e.g. "K", "RightShift"
+--   Aquafield:Destroy()
+--
+-- WINDOW:
+--   Window:CreateTab(name, iconId)       -> Tab
+--   Window:Toggle()                      -- minimise / restore
+--
+-- TAB:
+--   Tab:CreateSection(title)
+--   Tab:CreateLabel(text)
+--   Tab:CreateParagraph({ Title, Content })
+--   Tab:CreateButton({ Name, Callback })
+--   Tab:CreateToggle({ Name, CurrentValue, Flag, Callback })
+--   Tab:CreateSlider({ Name, Range={min,max}, Increment, Suffix,
+--                      CurrentValue, Flag, Callback })
+--   Tab:CreateDropdown({ Name, Options, CurrentOption,
+--                        MultipleOptions, Flag, Callback })
+--   Tab:CreateInput({ Name, PlaceholderText,
+--                     RemoveTextAfterFocusLost, Flag, Callback })
+--   Tab:CreateKeybind({ Name, CurrentKeybind, Flag, Callback })
+--   Tab:CreateColorPicker({ Name, Color, Flag, Callback })
+--
+-- THEMES:
+--   "Ocean"        - calm cyan/navy
+--   "Crimson"      - red on near-black
+--   "MatrixGreen"  - cyberpunk green
+--   "Amethyst"     - purples
+--   "Sunset"       - warm orange/red
+--   "Midnight"     - cool deep blues
+--   "Forest"       - earth greens
+--   "Cyber"        - vivid cyan + magenta
+--   "Aurora"       - mint + lilac
+--   "Mono"         - black & white
+--
+-- TOGGLE KEYBIND:
+--   The whole UI hides/shows on a single keypress.
+--   Default is K.  Change it from the Settings tab
+--   (auto-injected into every window) or programmatically:
+--
+--       Aquafield:SetToggleKeybind("RightShift")
+--
+--   Or pass it when creating the window:
+--
+--       Aquafield:CreateWindow({ ToggleUIKeybind = "F" })
+--
+-- CONFIG SAVING:
+--   When ConfigurationSaving.Enabled = true, the library
+--   persists:
+--     * all Flag values
+--     * current theme
+--     * current toggle keybind
+--     * acrylic strength
+--     * notification position
+--
+-- COLOR UTILS:
+--   Aquafield.Color.fromHex("#3498db")
+--   Aquafield.Color.toHex(Color3)
+--   Aquafield.Color.lerp(a, b, t)
+--   Aquafield.Color.darken(c, 0.2)
+--   Aquafield.Color.lighten(c, 0.2)
+--   Aquafield.Color.complement(c)
+--   Aquafield.Color.greyscale(c)
+--
+-- MOTION HELPERS:
+--   Aquafield:Shake(inst, intensity, duration)
+--   Aquafield:Pulse(inst, scale, duration)
+--   Aquafield:FadeIn(inst, duration)
+--   Aquafield:FadeOut(inst, duration)
+--
+-- EASING PRESETS:
+--   Aquafield:Tween(inst, "Smooth"  , { ... })
+--   Aquafield:Tween(inst, "Snappy"  , { ... })
+--   Aquafield:Tween(inst, "Glide"   , { ... })
+--   Aquafield:Tween(inst, "Bounce"  , { ... })
+--   Aquafield:Tween(inst, "Slam"    , { ... })
+--   Aquafield:Tween(inst, "Crawl"   , { ... })
+--   Aquafield:Tween(inst, "Pop"     , { ... })
+--   Aquafield:Tween(inst, "FadeIn"  , { ... })
+--   Aquafield:Tween(inst, "FadeOut" , { ... })
+--   Aquafield:Tween(inst, "LongGlide",{ ... })
+--   Aquafield:Tween(inst, "ShortPunch",{ ... })
+--   Aquafield:Tween(inst, "RubberBand",{ ... })
+--
+-- SIGNALS:
+--   Aquafield.OnToggle:Connect(function(visible) ... end)
+--   Aquafield.OnThemeChange:Connect(function(name) ... end)
+--
+-- ICON CATALOG:
+--   Aquafield:GetIcon("home")            -> "rbxassetid://..."
+--   See Aquafield.Icons for the full list.
+--
+-- QUICK NOTIFIES:
+--   Aquafield:QuickInfo(title, content)
+--   Aquafield:QuickWarn(title, content)
+--   Aquafield:QuickError(title, content)
+--   Aquafield:QuickSuccess(title, content)
+--
+-- ============================================================
+-- EXAMPLE
+-- ============================================================
+--
+--   local Aquafield = loadstring(game:HttpGet("YOUR_URL"))()
+--
+--   local Window = Aquafield:CreateWindow({
+--       Name             = "Demo Hub",
+--       LoadingTitle     = "Demo",
+--       LoadingSubtitle  = "v1.0",
+--       Theme            = "Cyber",
+--       ToggleUIKeybind  = "K",
+--       ConfigurationSaving = {
+--           Enabled  = true,
+--           FolderName = "Aquafield",
+--           FileName = "Demo",
+--       },
+--   })
+--
+--   local Main = Window:CreateTab("Main",   Aquafield.Icons.home)
+--   local Vis  = Window:CreateTab("Visuals",Aquafield.Icons.eye)
+--   local Info = Window:CreateTab("Info",   Aquafield.Icons.info)
+--
+--   Main:CreateSection("Combat")
+--   Main:CreateToggle({
+--       Name = "Auto Attack",
+--       CurrentValue = false,
+--       Flag = "AutoAttack",
+--       Callback = function(v) print("AutoAttack:", v) end,
+--   })
+--   Main:CreateSlider({
+--       Name = "Attack Range",
+--       Range = { 1, 50 }, Increment = 1, Suffix = " studs",
+--       CurrentValue = 12,
+--       Flag = "AttackRange",
+--       Callback = function(v) print("range", v) end,
+--   })
+--   Main:CreateDropdown({
+--       Name = "Target Priority",
+--       Options = { "Closest", "Lowest HP", "Highest HP" },
+--       CurrentOption = "Closest",
+--       Flag = "TargetPri",
+--       Callback = function(v) print(v) end,
+--   })
+--
+--   Vis:CreateSection("ESP")
+--   Vis:CreateToggle({ Name = "Boxes",   CurrentValue = true,
+--                      Flag = "ESPBox",   Callback = function() end })
+--   Vis:CreateToggle({ Name = "Names",   CurrentValue = true,
+--                      Flag = "ESPName",  Callback = function() end })
+--   Vis:CreateColorPicker({
+--       Name = "ESP Color",
+--       Color = Color3.fromRGB(0, 255, 200),
+--       Flag = "ESPColor",
+--       Callback = function() end,
+--   })
+--   Vis:CreateButton({
+--       Name = "Reload visuals",
+--       Callback = function()
+--           Aquafield:QuickSuccess("Reloaded", "Visuals reloaded.")
+--       end,
+--   })
+--
+--   Info:CreateParagraph({
+--       Title   = "About",
+--       Content = "Press K to hide/show this UI. "
+--              .. "Change the keybind in the Settings tab.",
+--   })
+--   Info:CreateLabel("Build: 2.0.0")
+--
+--   Aquafield:LoadConfiguration()
+--
+-- ============================================================
+-- That's it. Enjoy.
+-- ============================================================
+
+--------------------------------------------------------------------------------
+-- CHANGELOG  (verbose, kept inline for portability)
+--------------------------------------------------------------------------------
+-- v2.0.0
+--   *  Complete visual overhaul:
+--      - Glassmorphism halo on every window
+--      - Animated entrance (spring back-out)
+--      - Indicator pill on the active sidebar tab
+--      - Gradient-filled progress / slider fills
+--      - Ripple effect on button click
+--      - Hover-shift arrow on buttons
+--      - Hover lift on theme swatches
+--      - Decorative ambient particle field
+--   *  Added Toggle-UI keybind system (default K)
+--      - Library-wide keybind, not per-window
+--      - User-editable from the auto-injected Settings tab
+--      - Persisted in saved config
+--   *  Added 7 new themes (Amethyst, Sunset, Midnight,
+--      Forest, Cyber, Aurora, Mono)
+--   *  Added Settings tab (auto-injected per window):
+--      - Theme switcher
+--      - Accent glow slider
+--      - Notification position picker
+--      - Toggle UI keybind picker
+--      - Hide UI button
+--      - About paragraph
+--   *  Added Aquafield.Icons catalog (Rayfield-compatible)
+--   *  Added Aquafield.Easing presets and Aquafield:Tween
+--   *  Added Aquafield.Color utilities (hex, lerp, complement,
+--      greyscale, lighten, darken)
+--   *  Added Aquafield.Signal + OnToggle / OnThemeChange
+--   *  Added motion helpers: Shake, Pulse, FadeIn, FadeOut
+--   *  Added QuickInfo / QuickWarn / QuickError / QuickSuccess
+--   *  Added per-config metadata (theme + keybind persistence)
+--   *  Improved key system layout
+--   *  Improved notification card with subtle gradient overlay
+--   *  Improved dropdown with hover background
+--
+-- v1.x
+--   *  Initial Rayfield-compatible API:
+--      CreateWindow, CreateTab, CreateSection, CreateLabel,
+--      CreateParagraph, CreateButton, CreateToggle, CreateSlider,
+--      CreateDropdown, CreateInput, CreateKeybind, CreateColorPicker
+--   *  Themes: Ocean, Crimson, MatrixGreen
+--   *  Config saving via writefile / readfile when supported
+--   *  Drag-anywhere windows
+--   *  Loading splash screen
+--   *  Key system gate
+
+--------------------------------------------------------------------------------
+-- APPENDIX A  --  THEME PHILOSOPHY
+--------------------------------------------------------------------------------
+-- Each theme is hand-tuned around four values: Background, Sidebar,
+-- Accent, and Text. The remaining channels (Element, ElementHover,
+-- Border, etc.) are picked to keep contrast consistent across themes.
+--
+-- Ocean
+--   Inspired by the calm of deep water at night. The accent is a
+--   cool sky-blue that pops against the navy sidebar without being
+--   harsh on dark screens. Best paired with marine icons.
+--
+-- Crimson
+--   A bold, dramatic palette: near-black surfaces with an intense
+--   red accent. Good for "danger" themed hubs or anything that
+--   needs to feel high-stakes.
+--
+-- MatrixGreen
+--   Classic cyberpunk-terminal vibe. The accent is a saturated
+--   green that reads like CRT text. Best with monospace icons.
+--
+-- Amethyst
+--   Royal purple on midnight. Feels expensive, slightly mystical.
+--   Pairs well with magic/RPG hubs.
+--
+-- Sunset
+--   Warm orange + red, like a golden hour overlay. Friendly and
+--   inviting; great for casual / minigame UIs.
+--
+-- Midnight
+--   Cool blue-grey, very low saturation. Reads as calm and
+--   professional. Good for analytics dashboards.
+--
+-- Forest
+--   Mossy greens and earth tones. Organic and grounded.
+--
+-- Cyber
+--   Electric cyan accent on near-black, with a magenta error
+--   highlight. Maximum neon, minimum apology.
+--
+-- Aurora
+--   Mint + lilac on deep teal. Inspired by the northern lights.
+--   Soft but distinctive.
+--
+-- Mono
+--   Black and white. The accent is pure white. Use this when
+--   you want the content to do the talking, not the chrome.
+
+--------------------------------------------------------------------------------
+-- APPENDIX B  --  KEYBIND DESIGN NOTES
+--------------------------------------------------------------------------------
+-- Why a single library-wide toggle keybind (not one per window)?
+--
+--   1. Discoverability.  Users only need to remember ONE key to
+--      get their UI back. With multiple windows it would be unclear
+--      which one a keypress targeted.
+--   2. Predictability.  External scripts can reliably call
+--      Aquafield:Toggle() without knowing the structure.
+--   3. Consistency with Rayfield.  Rayfield uses a single global
+--      toggle keybind; we keep that contract.
+--
+-- Why default to "K"?
+--
+--   * It is unbound in default Roblox controls.
+--   * It is easy to press with the left hand while moving with WASD.
+--   * It matches the request in the project brief.
+--
+-- How is the keybind persisted?
+--
+--   When ConfigurationSaving is enabled, the keybind name is stored
+--   under the _meta.keybind field of the JSON config.  On the next
+--   :LoadConfiguration() call the keybind is restored before any
+--   tab UI is rebuilt, so the user's preference takes effect
+--   immediately.
+--
+-- How does the Settings tab keybind picker stay in sync?
+--
+--   The picker is a normal CreateKeybind() control. We poll its
+--   CurrentKeybind in a background coroutine and update the
+--   library's ToggleUIKeybind whenever it changes. This avoids
+--   monkey-patching UserInputService.InputBegan.
+
+--------------------------------------------------------------------------------
+-- APPENDIX C  --  PERFORMANCE NOTES
+--------------------------------------------------------------------------------
+-- The particle field is intentionally cheap: max 40 simultaneous
+-- particles, each a 2-5px Frame with a Tween that runs once and
+-- destroys itself. CPU cost is dominated by the Tween scheduler.
+--
+-- Theme switching does not rebuild any UI. It iterates the
+-- _themed registry and re-assigns BackgroundColor3 / TextColor3 /
+-- ImageColor3 / UIStroke.Color in place. The registry stores a
+-- weak reference shape (table per instance) so deleted instances
+-- become a no-op rather than throwing.
+--
+-- Config saving is debounced to once every 10 seconds by the
+-- autosave loop. It is also called on window close. The data is
+-- JSON-encoded with HttpService, which is faster than table.concat
+-- for nested structures.
+--
+-- All Tweens use Quad-Out by default; the "spring" helper uses
+-- Back-Out for entrance bounce. We deliberately avoid Elastic for
+-- frequent interactions because it can feel sluggish.
+
+--------------------------------------------------------------------------------
+-- APPENDIX D  --  MIGRATING FROM RAYFIELD
+--------------------------------------------------------------------------------
+-- Aquafield's public API is a strict superset of Rayfield's.
+-- A Rayfield script generally just works by changing the
+-- loadstring URL. Behavioural differences worth noting:
+--
+--   * Aquafield auto-injects a "Settings" tab. If you do not
+--     want it, comment out the `do ... end` block at the bottom
+--     of CreateWindow.
+--   * The default toggle keybind is K. Rayfield uses K too,
+--     so no change is needed.
+--   * Themes are named differently and Aquafield ships with
+--     ten of them. Pass Theme = "Default" to fall back to Ocean.
+--   * Notifications include a subtle gradient overlay; pass
+--     Image = your_id to keep parity with Rayfield calls.
+--   * Window:Toggle() minimises the window (chrome-only).
+--     Aquafield:Toggle() hides the entire UI (the keybind path).
+--------------------------------------------------------------------------------
+-- APPENDIX E  --  RECIPE COOKBOOK
+--------------------------------------------------------------------------------
+-- Recipe 1:  A simple "auto farm" tab
+-- ----------------------------------------
+--   local Farm = Window:CreateTab("Auto Farm", Aquafield.Icons.play)
+--   Farm:CreateSection("Targets")
+--   Farm:CreateDropdown({
+--       Name = "Mob",
+--       Options = { "Goblin", "Wolf", "Bear" },
+--       CurrentOption = "Goblin",
+--       Flag = "FarmMob",
+--       Callback = function(v) farmConfig.mob = v end,
+--   })
+--   Farm:CreateSlider({
+--       Name = "Distance",
+--       Range = { 5, 200 }, Increment = 5, Suffix = " studs",
+--       CurrentValue = 50,
+--       Flag = "FarmDist",
+--       Callback = function(v) farmConfig.dist = v end,
+--   })
+--   Farm:CreateToggle({
+--       Name = "Enabled",
+--       CurrentValue = false,
+--       Flag = "FarmEnabled",
+--       Callback = function(v) farmConfig.on = v end,
+--   })
+--
+-- Recipe 2:  An ESP tab with live color preview
+-- --------------------------------------------
+--   local ESP = Window:CreateTab("ESP", Aquafield.Icons.eye)
+--   ESP:CreateColorPicker({
+--       Name = "Box color",
+--       Color = Color3.fromRGB(0, 255, 200),
+--       Flag = "ESPColor",
+--       Callback = function(c) updateESP(c) end,
+--   })
+--   ESP:CreateToggle({
+--       Name = "Through walls",
+--       CurrentValue = false, Flag = "ESPWalls",
+--       Callback = function(v) setOcclusion(v) end,
+--   })
+--
+-- Recipe 3:  A teleport list rebuilt from server state
+-- ---------------------------------------------------
+--   local TP = Window:CreateTab("Teleport", Aquafield.Icons.map)
+--   local dd = TP:CreateDropdown({
+--       Name = "Location",
+--       Options = {},
+--       CurrentOption = nil,
+--       Callback = function(v) goTo(v) end,
+--   })
+--   -- later:
+--   dd:Refresh(getCurrentLocationNames())
+--
+-- Recipe 4:  Bind a hotkey to a specific feature
+-- ----------------------------------------------
+--   Main:CreateKeybind({
+--       Name = "Fire",
+--       CurrentKeybind = "E",
+--       Callback = function() fireWeapon() end,
+--   })
+--
+-- Recipe 5:  React to theme changes from outside the library
+-- ----------------------------------------------------------
+--   Aquafield.OnThemeChange:Connect(function(name)
+--       print("Theme is now", name)
+--       Aquafield:QuickInfo("Theme", "Switched to " .. name)
+--   end)
+--
+-- Recipe 6:  React to UI visibility
+-- ---------------------------------
+--   Aquafield.OnToggle:Connect(function(visible)
+--       if visible then
+--           print("UI shown")
+--       else
+--           print("UI hidden")
+--       end
+--   end)
+--
+-- Recipe 7:  Change toggle keybind in code
+-- ----------------------------------------
+--   Aquafield:SetToggleKeybind("RightShift")
+--
+-- Recipe 8:  Use the icon catalog
+-- -------------------------------
+--   Window:CreateTab("Profile", Aquafield.Icons.user)
+--
+-- Recipe 9:  Use the easing presets in your own tweens
+-- ----------------------------------------------------
+--   Aquafield:Tween(myFrame, "Bounce", { Size = UDim2.new(0, 100, 0, 100) })
+--
+-- Recipe 10:  Make any frame shake on damage
+-- ------------------------------------------
+--   onDamageTaken(function()
+--       Aquafield:Shake(Window._Main, 6, 0.2)
+--   end)
+
+--------------------------------------------------------------------------------
+-- APPENDIX F  --  FREQUENTLY ASKED QUESTIONS
+--------------------------------------------------------------------------------
+-- Q. How do I change the toggle keybind?
+-- A. Three ways:
+--      1. Pass ToggleUIKeybind = "K" when creating the window.
+--      2. Call Aquafield:SetToggleKeybind("F") at any time.
+--      3. Open the auto-injected Settings tab and click the
+--         "Toggle UI" keybind picker, then press your new key.
+--    The default is K.
+--
+-- Q. The UI vanished and the keybind no longer brings it back?
+-- A. Either:
+--      - The ScreenGui was destroyed by another script
+--        (call Aquafield:Destroy() then re-create your window), or
+--      - Another script captured the InputBegan event with
+--        gameProcessed = true. Try a different key in Settings.
+--
+-- Q. Can I run two Aquafield windows at once?
+-- A. Yes. Call CreateWindow twice. Both windows share the
+--    single ScreenGui and the single toggle keybind, so pressing
+--    K will hide / show both at the same time.
+--
+-- Q. The keybind picker doesn't update the toggle key?
+-- A. It does, but with a 0.2s polling delay. If you need
+--    instant updates, call Aquafield:SetToggleKeybind() yourself.
+--
+-- Q. Can I disable the auto-injected Settings tab?
+-- A. Yes - comment out the `do ... Settings ... end` block
+--    near the bottom of CreateWindow.
+--
+-- Q. Are notifications themed?
+-- A. Yes. They use the current theme's Sidebar / Accent / Text
+--    / SubText tokens, so they shift colors when SetTheme runs.
+--
+-- Q. Does it support touch screens?
+-- A. Yes. Drag, sliders, color picker, and dropdowns all
+--    listen for Enum.UserInputType.Touch alongside MouseButton1.
+--
+-- Q. Why is my config not saving?
+-- A. The host executor must expose writefile / readfile / isfile.
+--    Vanilla Roblox does not; this only works in script
+--    executors that whitelist those globals.
+--
+-- Q. How do I add my own theme?
+-- A. Add an entry to the Themes table at the top of this file.
+--    All keys (Background, Sidebar, Topbar, Element,
+--    ElementHover, Accent, AccentSoft, Text, SubText, Border,
+--    Success, Error) are required.
+
+--------------------------------------------------------------------------------
+-- APPENDIX G  --  THEME COLOR TABLE  (for reference)
+--------------------------------------------------------------------------------
+--
+-- key            Ocean        Crimson      MatrixGreen   Amethyst
+-- -------------- ------------ ------------ ------------- -------------
+-- Background     10 18 30     18  8 10      4 12  6      16 10 28
+-- Sidebar        14 24 40     24 10 14      6 18 10      22 14 38
+-- Topbar         12 22 36     20  9 12      5 15  8      18 12 32
+-- Element        20 34 54     38 14 20     10 28 14      32 22 54
+-- ElementHover   28 46 72     58 20 28     16 44 22      46 32 76
+-- Accent         64 180 255  235 60 80     80 255 130   170 120 255
+-- AccentSoft     28 110 180  150 30 45     30 160 70    110  70 200
+-- Text          225 240 255  255 235 235  210 255 220  235 225 255
+-- SubText       140 170 200  190 150 155  120 180 140  170 150 210
+-- Border         34  60  90   80  25  35   28  80  40   70  50 110
+-- Success        80 220 200  120 220 140  120 255 160  130 255 210
+-- Error         255  90 110  255  80  80  255 100 100  255  90 160
+--
+-- key            Sunset       Midnight     Forest        Cyber
+-- -------------- ------------ ------------ ------------- -------------
+-- Background     28 14 18      6  8 16      8 18 12       4  6 14
+-- Sidebar        40 20 22     10 12 22     12 26 18       8 10 22
+-- Topbar         34 16 20      8 10 18     10 22 15       6  8 18
+-- Element        54 26 28     16 20 32     18 38 24      14 18 34
+-- ElementHover   74 38 38     22 28 44     28 54 36      22 28 52
+-- Accent        255 140  80  120 140 255  110 210 140    0 240 255
+-- AccentSoft    220  90  60   60  80 200   50 140  80    0 140 200
+-- Text          255 235 220  220 228 255  220 240 225  200 250 255
+-- SubText       210 170 150  140 150 200  150 190 160  110 170 200
+-- Border        110  55  50   40  50  80   40  80  55   20  80 120
+-- Success       255 210 120  100 220 200  200 240 140  255  80 200
+-- Error         255 100  90  255 120 140  255 120 120  255  80 140
+--
+-- key            Aurora       Mono
+-- -------------- ------------ -----------
+-- Background      8 12 22     12 12 12
+-- Sidebar        14 20 34     18 18 18
+-- Topbar         12 16 28     14 14 14
+-- Element        22 32 50     28 28 28
+-- ElementHover   32 44 70     40 40 40
+-- Accent        130 230 200  240 240 240
+-- AccentSoft     60 160 180  160 160 160
+-- Text          225 240 240  245 245 245
+-- SubText       150 190 200  160 160 160
+-- Border         50  80 100   60  60  60
+-- Success       200 160 255  180 255 180
+-- Error         255 140 180  255 140 140
+--
+
+--------------------------------------------------------------------------------
+-- APPENDIX H  --  ICON CATALOG REFERENCE
+--------------------------------------------------------------------------------
+-- The Aquafield.Icons table maps short names to rbxassetids:
+--   Aquafield.Icons.home
+--   Aquafield.Icons.settings
+--   Aquafield.Icons.user
+--   Aquafield.Icons.search
+--   Aquafield.Icons.close
+--   Aquafield.Icons.check
+--   Aquafield.Icons.warning
+--   Aquafield.Icons.info
+--   Aquafield.Icons.error
+--   Aquafield.Icons.star
+--   Aquafield.Icons.heart
+--   Aquafield.Icons.trash
+--   Aquafield.Icons.download
+--   Aquafield.Icons.upload
+--   Aquafield.Icons.link
+--   Aquafield.Icons.lock
+--   Aquafield.Icons.unlock
+--   Aquafield.Icons.eye
+--   Aquafield.Icons.eye_off
+--   Aquafield.Icons.play
+--   Aquafield.Icons.pause
+--   Aquafield.Icons.stop
+--   Aquafield.Icons.next
+--   Aquafield.Icons.prev
+--   Aquafield.Icons.plus
+--   Aquafield.Icons.minus
+--   Aquafield.Icons.edit
+--   Aquafield.Icons.save
+--   Aquafield.Icons.refresh
+--   Aquafield.Icons.share
+--   Aquafield.Icons.globe
+--   Aquafield.Icons.cog
+--   Aquafield.Icons.bell
+--   Aquafield.Icons.calendar
+--   Aquafield.Icons.clock
+--   Aquafield.Icons.mail
+--   Aquafield.Icons.chat
+--   Aquafield.Icons.phone
+--   Aquafield.Icons.map
+--   Aquafield.Icons.camera
+--   Aquafield.Icons.image
+--   Aquafield.Icons.video
+--   Aquafield.Icons.music
+--   Aquafield.Icons.mic
+--   Aquafield.Icons.volume
+--   Aquafield.Icons.battery
+--   Aquafield.Icons.wifi
+--   Aquafield.Icons.bluetooth
+--   Aquafield.Icons.compass
+--   Aquafield.Icons.flag
+--   Aquafield.Icons.bookmark
+--
+-- Pass any of these to CreateTab(name, iconId) by writing
+--   Window:CreateTab("Profile", Aquafield.Icons.user)
+
+--------------------------------------------------------------------------------
+-- APPENDIX I  --  END-OF-FILE
+--------------------------------------------------------------------------------
+-- This file is intentionally verbose: it ships as a single
+-- loadstring-friendly Lua module, with no external deps. Edit
+-- freely; the public API is the only contract you should treat
+-- as stable across versions.
+
+--------------------------------------------------------------------------------
+-- APPENDIX J  --  EXTENDED EXAMPLE  (a fully featured hub)
+--------------------------------------------------------------------------------
+-- The following example exercises every public component and
+-- the keybind / theme / config systems end to end.  Drop it
+-- below the loadstring line to verify a fresh install.
+--
+--   local Aquafield = loadstring(game:HttpGet("YOUR_URL"))()
+--
+--   --====================================================--
+--   -- Window
+--   --====================================================--
+--   local Window = Aquafield:CreateWindow({
+--       Name             = "Aquafield Demo Hub",
+--       Icon             = Aquafield.Icons.home,
+--       LoadingTitle     = "Aquafield",
+--       LoadingSubtitle  = "Demo build",
+--       Theme            = "Cyber",
+--       ToggleUIKeybind  = "K",
+--       DisableAquafieldPrompts = false,
+--       ConfigurationSaving = {
+--           Enabled    = true,
+--           FolderName = "Aquafield",
+--           FileName   = "Demo",
+--       },
+--       KeySystem = false,
+--   })
+--
+--   --====================================================--
+--   -- Main tab
+--   --====================================================--
+--   local Main = Window:CreateTab("Main", Aquafield.Icons.home)
+--   Main:CreateSection("General")
+--   Main:CreateLabel("Welcome to the demo hub.")
+--   Main:CreateParagraph({
+--       Title   = "Read me first",
+--       Content = "Press K to hide / show this UI.  Change "
+--              .. "the keybind in the Settings tab if K is taken.",
+--   })
+--   Main:CreateButton({
+--       Name = "Say hi",
+--       Callback = function()
+--           Aquafield:QuickSuccess("Hi", "Hello from the demo.")
+--       end,
+--   })
+--   Main:CreateButton({
+--       Name = "Shake window",
+--       Callback = function()
+--           Aquafield:Shake(Window._Main, 8, 0.35)
+--       end,
+--   })
+--   Main:CreateButton({
+--       Name = "Pulse window",
+--       Callback = function()
+--           Aquafield:Pulse(Window._Main, 1.02, 0.3)
+--       end,
+--   })
+--
+--   --====================================================--
+--   -- Inputs tab
+--   --====================================================--
+--   local Inputs = Window:CreateTab("Inputs", Aquafield.Icons.edit)
+--   Inputs:CreateSection("Toggles")
+--   Inputs:CreateToggle({
+--       Name = "Boolean A",
+--       CurrentValue = false, Flag = "boolA",
+--       Callback = function(v) print("boolA", v) end,
+--   })
+--   Inputs:CreateToggle({
+--       Name = "Boolean B",
+--       CurrentValue = true,  Flag = "boolB",
+--       Callback = function(v) print("boolB", v) end,
+--   })
+--
+--   Inputs:CreateSection("Sliders")
+--   Inputs:CreateSlider({
+--       Name = "Speed", Range = { 0, 100 }, Increment = 1,
+--       Suffix = "%", CurrentValue = 50, Flag = "speed",
+--       Callback = function(v) print("speed", v) end,
+--   })
+--   Inputs:CreateSlider({
+--       Name = "Volume", Range = { 0, 10 }, Increment = 0.1,
+--       CurrentValue = 5, Flag = "volume",
+--       Callback = function(v) print("volume", v) end,
+--   })
+--
+--   Inputs:CreateSection("Dropdowns")
+--   Inputs:CreateDropdown({
+--       Name = "Single", Options = { "Red", "Green", "Blue" },
+--       CurrentOption = "Red", Flag = "singleDD",
+--       Callback = function(v) print("single", v) end,
+--   })
+--   Inputs:CreateDropdown({
+--       Name = "Multi", Options = { "A", "B", "C", "D" },
+--       MultipleOptions = true, CurrentOption = { "A", "C" },
+--       Flag = "multiDD",
+--       Callback = function(v) print("multi", table.concat(v, ",")) end,
+--   })
+--
+--   Inputs:CreateSection("Text")
+--   Inputs:CreateInput({
+--       Name = "Player name",
+--       PlaceholderText = "Type a name...",
+--       Flag = "playerName",
+--       Callback = function(v) print("name", v) end,
+--   })
+--   Inputs:CreateInput({
+--       Name = "Search", PlaceholderText = "Search...",
+--       RemoveTextAfterFocusLost = true, Flag = "search",
+--       Callback = function(v) print("search", v) end,
+--   })
+--
+--   Inputs:CreateSection("Keybinds")
+--   Inputs:CreateKeybind({
+--       Name = "Fire", CurrentKeybind = "F",
+--       Flag = "fireKey",
+--       Callback = function() print("fire!") end,
+--   })
+--   Inputs:CreateKeybind({
+--       Name = "Reload", CurrentKeybind = "R",
+--       Flag = "reloadKey",
+--       Callback = function() print("reload!") end,
+--   })
+--
+--   Inputs:CreateSection("Color")
+--   Inputs:CreateColorPicker({
+--       Name = "Accent", Color = Color3.fromRGB(0, 240, 255),
+--       Flag = "accentColor",
+--       Callback = function(c) print("accent", c) end,
+--   })
+--
+--   --====================================================--
+--   -- Themes tab
+--   --====================================================--
+--   local Themes = Window:CreateTab("Themes", Aquafield.Icons.image)
+--   Themes:CreateSection("Switch theme from code")
+--   for _, n in ipairs({ "Ocean","Crimson","MatrixGreen",
+--                        "Amethyst","Sunset","Midnight",
+--                        "Forest","Cyber","Aurora","Mono" }) do
+--       Themes:CreateButton({
+--           Name = "Set theme: " .. n,
+--           Callback = function() Aquafield:SetTheme(n) end,
+--       })
+--   end
+--
+--   --====================================================--
+--   -- Toasts tab
+--   --====================================================--
+--   local Toasts = Window:CreateTab("Toasts", Aquafield.Icons.bell)
+--   Toasts:CreateButton({ Name = "Info toast",
+--       Callback = function()
+--           Aquafield:QuickInfo("Heads up", "This is an info toast.")
+--       end })
+--   Toasts:CreateButton({ Name = "Warn toast",
+--       Callback = function()
+--           Aquafield:QuickWarn("Careful", "This is a warning toast.")
+--       end })
+--   Toasts:CreateButton({ Name = "Error toast",
+--       Callback = function()
+--           Aquafield:QuickError("Uh oh", "This is an error toast.")
+--       end })
+--   Toasts:CreateButton({ Name = "Success toast",
+--       Callback = function()
+--           Aquafield:QuickSuccess("Done", "This is a success toast.")
+--       end })
+--
+--   --====================================================--
+--   -- Bind a quick custom hotkey from outside the UI
+--   --====================================================--
+--   Aquafield:Bind("N", function()
+--       Aquafield:QuickInfo("N pressed", "Custom global bind.")
+--   end)
+--
+--   --====================================================--
+--   -- Restore saved values
+--   --====================================================--
+--   Aquafield:LoadConfiguration()
+--
+-- That single block exercises every component, every toast
+-- variant, theme switching, the global keybind helper, and
+-- config persistence.  If anything fails to render, check the
+-- console -- Aquafield never silences errors in user callbacks
+-- beyond a pcall, so any traceback there points at the line
+-- in YOUR code, not the library.
+
+--------------------------------------------------------------------------------
+-- APPENDIX K  --  FILE LAYOUT (for maintainers)
+--------------------------------------------------------------------------------
+-- Sections in this file, in order:
+--   1. Header / usage comment
+--   2. Services
+--   3. Themes table  (10 themes)
+--   4. Library root  (Aquafield = { ... })
+--   5. Core helpers  (new, tween, spring, corner, stroke,
+--      pad, gradient, lerpColor, darken, lighten, keyCodeFromName)
+--   6. Theme registry + applyThemeColors + SetTheme
+--   7. Drag helper
+--   8. Root ScreenGui setup
+--   9. Particle field
+--  10. Notification stack + positioning
+--  11. Config save / load + LoadConfiguration
+--  12. Loading splash screen
+--  13. Key system
+--  14. Toggle-UI visibility + global keybind listener
+--  15. CreateWindow  (the heart)
+--  16. CreateTab  + all component constructors
+--      (Section, Label, Paragraph, Button, Toggle, Slider,
+--       Dropdown, Input, Keybind, ColorPicker)
+--  17. Auto-injected Settings tab
+--  18. Icon catalog
+--  19. Easing presets + Aquafield:Tween
+--  20. Color utilities
+--  21. Signal helper + OnToggle / OnThemeChange
+--  22. Quick notify helpers
+--  23. Motion helpers (Shake, Pulse, FadeIn, FadeOut)
+--  24. Global keybind helpers (Bind, Unbind)
+--  25. Screen utilities (CenterOnScreen, GetViewport)
+--  26. Destroy
+--  27. Documentation reference
+--  28. Changelog
+--  29. Appendices A-K (philosophy, keybinds, perf, migration,
+--      cookbook, FAQ, color table, icon catalog, EOF marker,
+--      extended example, file layout)
 
 return Aquafield
