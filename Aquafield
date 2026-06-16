@@ -602,9 +602,10 @@ local NotifHolder = new("Frame", {
     Position         = UDim2.new(1, -20, 1, -20),
     Size             = UDim2.new(0, 340, 1, -40),
     BackgroundTransparency = 1,
+    ZIndex           = 50,
     Parent           = ScreenGui,
 })
-new("UIListLayout", {
+local NotifLayout = new("UIListLayout", {
     Padding             = UDim.new(0, 10),
     HorizontalAlignment = Enum.HorizontalAlignment.Right,
     VerticalAlignment   = Enum.VerticalAlignment.Bottom,
@@ -638,45 +639,80 @@ local function positionNotifHolder(side)
     end
 end
 
+-- Lucide icon presets for notifications (asset ids that resolve under
+-- standard Roblox executors; falls back gracefully when missing)
+local NOTIF_ICONS = {
+    info    = "rbxassetid://10723407389",  -- info
+    success = "rbxassetid://10747373176",  -- check-circle
+    warn    = "rbxassetid://10723434769",  -- alert-triangle
+    error   = "rbxassetid://10723345766",  -- x-circle
+    bell    = "rbxassetid://10723415903",  -- bell
+}
+
 function Aquafield:Notify(opts)
     opts = opts or {}
     local title    = opts.Title    or "Notification"
     local content  = opts.Content  or ""
-    local duration = opts.Duration or 4
-    local image    = opts.Image
+    local duration = tonumber(opts.Duration) or 4
+    local image    = opts.Image or NOTIF_ICONS.bell
     local th       = Aquafield.Theme
 
     if typeof(image) == "number" then
         image = "rbxassetid://" .. tostring(image)
+    elseif type(image) == "string" and NOTIF_ICONS[image] then
+        image = NOTIF_ICONS[image]
     end
 
+    -- Card container (wrap so UIListLayout positions it cleanly while we
+    -- animate the inner card horizontally for the slide-in effect)
+    local wrap = new("Frame", {
+        Size                   = UDim2.new(1, 0, 0, 78),
+        BackgroundTransparency = 1,
+        ClipsDescendants       = false,
+        ZIndex                 = 50,
+        Parent                 = NotifHolder,
+    })
+
     local card = new("Frame", {
-        Size                  = UDim2.new(1, 0, 0, 78),
-        BackgroundColor3      = th.Sidebar,
-        BackgroundTransparency= 0.05,
-        Position              = UDim2.new(1, 80, 0, 0),
-        Parent                = NotifHolder,
+        Size                   = UDim2.new(1, 0, 1, 0),
+        Position               = UDim2.new(1, 80, 0, 0),
+        BackgroundColor3       = th.Sidebar,
+        BackgroundTransparency = 0.02,
+        BorderSizePixel        = 0,
+        ZIndex                 = 51,
+        Parent                 = wrap,
     })
     corner(card, 12)
-    stroke(card, th.Border, 1, 0.4)
+    stroke(card, th.Border, 1, 0.3)
     themed(card, "Sidebar")
 
-    -- glow gradient overlay
+    -- Soft accent gradient overlay (does NOT cover content because its
+    -- ZIndex stays under the labels)
     local glow = new("Frame", {
-        Size = UDim2.new(1, 0, 1, 0),
-        BackgroundColor3 = th.Accent,
-        BackgroundTransparency = 0.92,
-        BorderSizePixel = 0,
-        Parent = card,
+        Size                   = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3       = th.Accent,
+        BackgroundTransparency = 0.88,
+        BorderSizePixel        = 0,
+        ZIndex                 = 51,
+        Parent                 = card,
     })
     corner(glow, 12); themed(glow, "Accent")
-    gradient(glow, Color3.new(1,1,1), Color3.new(0,0,0), 45)
+    new("UIGradient", {
+        Color        = ColorSequence.new(Color3.new(1,1,1), Color3.new(0,0,0)),
+        Rotation     = 25,
+        Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.4),
+            NumberSequenceKeypoint.new(1, 1),
+        }),
+        Parent = glow,
+    })
 
     local accent = new("Frame", {
         Size             = UDim2.new(0, 3, 1, -16),
         Position         = UDim2.new(0, 8, 0, 8),
         BackgroundColor3 = th.Accent,
         BorderSizePixel  = 0,
+        ZIndex           = 52,
         Parent           = card,
     })
     corner(accent, 2); themed(accent, "Accent")
@@ -684,42 +720,45 @@ function Aquafield:Notify(opts)
     local left = 18
     if image then
         local img = new("ImageLabel", {
-            Image            = image,
-            Size             = UDim2.new(0, 30, 0, 30),
-            Position         = UDim2.new(0, 18, 0, 14),
+            Image                  = image,
+            Size                   = UDim2.new(0, 26, 0, 26),
+            Position               = UDim2.new(0, 18, 0, 16),
             BackgroundTransparency = 1,
-            ImageColor3      = th.Accent,
-            Parent           = card,
+            ImageColor3            = th.Accent,
+            ZIndex                 = 53,
+            Parent                 = card,
         })
         themed(img, "Accent", "image")
-        left = 56
+        left = 54
     end
 
     local titleLbl = new("TextLabel", {
-        Text             = title,
-        Font             = Enum.Font.GothamBold,
-        TextSize         = 14,
-        TextColor3       = th.Text,
+        Text                   = title,
+        Font                   = Enum.Font.GothamBold,
+        TextSize               = 14,
+        TextColor3             = th.Text,
         BackgroundTransparency = 1,
-        Position         = UDim2.new(0, left, 0, 10),
-        Size             = UDim2.new(1, -left - 12, 0, 18),
-        TextXAlignment   = Enum.TextXAlignment.Left,
-        Parent           = card,
+        Position               = UDim2.new(0, left, 0, 10),
+        Size                   = UDim2.new(1, -left - 12, 0, 18),
+        TextXAlignment         = Enum.TextXAlignment.Left,
+        ZIndex                 = 53,
+        Parent                 = card,
     })
     themed(titleLbl, "Text", "text")
 
     local body = new("TextLabel", {
-        Text             = content,
-        Font             = Enum.Font.Gotham,
-        TextSize         = 12,
-        TextColor3       = th.SubText,
+        Text                   = content,
+        Font                   = Enum.Font.Gotham,
+        TextSize               = 12,
+        TextColor3             = th.SubText,
         BackgroundTransparency = 1,
-        Position         = UDim2.new(0, left, 0, 30),
-        Size             = UDim2.new(1, -left - 12, 1, -42),
-        TextXAlignment   = Enum.TextXAlignment.Left,
-        TextYAlignment   = Enum.TextYAlignment.Top,
-        TextWrapped      = true,
-        Parent           = card,
+        Position               = UDim2.new(0, left, 0, 30),
+        Size                   = UDim2.new(1, -left - 12, 1, -42),
+        TextXAlignment         = Enum.TextXAlignment.Left,
+        TextYAlignment         = Enum.TextYAlignment.Top,
+        TextWrapped            = true,
+        ZIndex                 = 53,
+        Parent                 = card,
     })
     themed(body, "SubText", "text")
 
@@ -728,19 +767,26 @@ function Aquafield:Notify(opts)
         Position         = UDim2.new(0, 8, 1, -6),
         BackgroundColor3 = th.Accent,
         BorderSizePixel  = 0,
+        ZIndex           = 53,
         Parent           = card,
     })
     corner(bar, 2); themed(bar, "Accent")
 
-    spring(card, 0.4, { Position = UDim2.new(0, 0, 0, 0) })
-    tween(bar, duration, { Size = UDim2.new(0, 0, 0, 2) }, Enum.EasingStyle.Linear)
+    -- Slide-in animation (animate the inner card; wrap is laid out by
+    -- the UIListLayout)
+    tween(card, 0.45, { Position = UDim2.new(0, 0, 0, 0) },
+        Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    tween(bar, duration, { Size = UDim2.new(0, 0, 0, 2) },
+        Enum.EasingStyle.Linear)
 
     task.delay(duration, function()
-        tween(card, 0.3, {
+        tween(card, 0.35, {
             Position               = UDim2.new(1, 80, 0, 0),
             BackgroundTransparency = 1,
-        })
-        task.wait(0.35); card:Destroy()
+        }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+        tween(titleLbl, 0.3, { TextTransparency = 1 })
+        tween(body,     0.3, { TextTransparency = 1 })
+        task.wait(0.4); wrap:Destroy()
     end)
 end
 
@@ -978,7 +1024,40 @@ local function setUIVisible(visible)
     Aquafield._hidden = not visible
     for _, w in ipairs(Aquafield._windows) do
         if w._Main then
-            w._Main.Visible = visible
+            local main = w._Main
+            if visible then
+                main.Visible = true
+                main.BackgroundTransparency = 1
+                local goalSize = main:GetAttribute("AQF_Size")
+                if not goalSize then
+                    goalSize = main.Size
+                    main:SetAttribute("AQF_Size", goalSize)
+                end
+                main.Size = UDim2.new(goalSize.X.Scale, goalSize.X.Offset * 0.85,
+                                      goalSize.Y.Scale, goalSize.Y.Offset * 0.85)
+                tween(main, 0.35, {
+                    BackgroundTransparency = 0,
+                    Size = goalSize,
+                    Rotation = 0,
+                }, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            else
+                local goalSize = main:GetAttribute("AQF_Size") or main.Size
+                main:SetAttribute("AQF_Size", goalSize)
+                local tw = tween(main, 0.28, {
+                    BackgroundTransparency = 1,
+                    Size = UDim2.new(goalSize.X.Scale, goalSize.X.Offset * 0.85,
+                                     goalSize.Y.Scale, goalSize.Y.Offset * 0.85),
+                    Rotation = -4,
+                }, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
+                tw.Completed:Connect(function()
+                    if Aquafield._hidden then
+                        main.Visible = false
+                        main.Size = goalSize
+                        main.Rotation = 0
+                        main.BackgroundTransparency = 0
+                    end
+                end)
+            end
         end
     end
 end
@@ -1310,16 +1389,16 @@ function Aquafield:CreateWindow(opts)
             fxThemedRotate(g, 14)
         end
 
-        local SearchIcon = new("TextLabel", {
-            Text                   = "\u{1F50D}",  -- magnifier glyph
-            Font                   = Enum.Font.GothamBold, TextSize = 13,
-            TextColor3             = th.SubText,
+        local SearchIcon = new("ImageLabel", {
+            Image                  = "rbxassetid://10734898355",  -- lucide: search
+            ImageColor3            = th.SubText,
+            ScaleType              = Enum.ScaleType.Fit,
             BackgroundTransparency = 1,
-            Position               = UDim2.new(0, 8, 0, 0),
-            Size                   = UDim2.new(0, 18, 1, 0),
+            Position               = UDim2.new(0, 8, 0.5, -7),
+            Size                   = UDim2.new(0, 14, 0, 14),
             Parent                 = SearchHolder,
         })
-        themed(SearchIcon, "SubText", "text")
+        themed(SearchIcon, "SubText", "image")
 
         local SearchBox = new("TextBox", {
             PlaceholderText        = "Search components...",
@@ -1347,11 +1426,11 @@ function Aquafield:CreateWindow(opts)
             })
             SearchBox.Focused:Connect(function()
                 tween(ring, 0.18, { Transparency = 0.1, Thickness = 1.6 })
-                tween(SearchIcon, 0.18, { TextColor3 = Aquafield.Theme.Accent })
+                tween(SearchIcon, 0.18, { ImageColor3 = Aquafield.Theme.Accent })
             end)
             SearchBox.FocusLost:Connect(function()
                 tween(ring, 0.25, { Transparency = 1, Thickness = 1 })
-                tween(SearchIcon, 0.25, { TextColor3 = Aquafield.Theme.SubText })
+                tween(SearchIcon, 0.25, { ImageColor3 = Aquafield.Theme.SubText })
             end)
         end
 
@@ -1570,34 +1649,53 @@ function Aquafield:CreateWindow(opts)
         --   substring).  Non-matching frames fade out + collapse.
         --   Section headers always stay visible.
         --------------------------------------------------------------
+        -- Collect ALL text from a component (label, sub-label, button,
+        -- dropdown options) so a single query character lights up every
+        -- matching element across the active tab.
         local function elementLabelText(frame)
-            if not frame:IsA("Frame") and not frame:IsA("TextButton") then return nil end
+            if not (frame:IsA("Frame") or frame:IsA("TextButton")) then return nil end
+            local pieces = {}
+            if frame:IsA("TextButton") and frame.Text and #frame.Text > 0 then
+                pieces[#pieces + 1] = frame.Text
+            end
             for _, d in ipairs(frame:GetDescendants()) do
-                if d:IsA("TextLabel") or d:IsA("TextBox") or d:IsA("TextButton") then
-                    if d.Text and #d.Text > 0 then return d.Text end
+                if (d:IsA("TextLabel") or d:IsA("TextBox") or d:IsA("TextButton"))
+                and d.Text and #d.Text > 0 then
+                    pieces[#pieces + 1] = d.Text
                 end
             end
-            return nil
+            if #pieces == 0 then return nil end
+            return table.concat(pieces, " ")
         end
 
         local activeTab  -- shared upvalue: also assigned inside Window:CreateTab
         local function runSearch(query)
-            query = (query or ""):lower()
+            query = tostring(query or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
             local page
             if activeTab then page = activeTab.Page end
             if not page then return end
             for _, child in ipairs(page:GetChildren()) do
                 if child:IsA("Frame") or child:IsA("TextButton") then
-                    local txt = elementLabelText(child)
-                    local show = (#query == 0) or (txt and txt:lower():find(query, 1, true))
-                    child.Visible = show ~= false and show ~= nil or (#query == 0)
+                    if #query == 0 then
+                        child.Visible = true
+                    else
+                        local txt = elementLabelText(child)
+                        child.Visible = (txt ~= nil)
+                            and (txt:lower():find(query, 1, true) ~= nil)
+                    end
                 end
             end
         end
 
+        -- Fire on every keystroke; some executors fire only one of the
+        -- two signals, so connect both for guaranteed live filtering.
         SearchBox:GetPropertyChangedSignal("Text"):Connect(function()
             runSearch(SearchBox.Text)
         end)
+        SearchBox.Changed:Connect(function(prop)
+            if prop == "Text" then runSearch(SearchBox.Text) end
+        end)
+        SearchBox.FocusLost:Connect(function() runSearch(SearchBox.Text) end)
         Window._RunSearch = runSearch
 
         --------------------------------------------------------------
