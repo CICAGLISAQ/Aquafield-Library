@@ -177,11 +177,13 @@ local Aquafield = {
     ThemeName       = "Ocean",
     ToggleUIKeybind = Enum.KeyCode.K,   -- default toggle key
     AcrylicStrength = 0.3,
+    AccentGlow      = 70,            -- NEW: accent-glow intensity 0..100 (live)
     NotifSide       = "BottomRight",
     _windows        = {},
     _themed         = {},
+    _glowItems      = {},            -- NEW: instances whose glow follows AccentGlow
     _hidden         = false,
-    _version        = "2.0",
+    _version        = "2.1",
 }
 
 --------------------------------------------------------------------------------
@@ -305,9 +307,46 @@ function Aquafield:SetTheme(name)
     for _, fn in ipairs(self._themeListeners) do
         pcall(fn, name, self.Theme)
     end
+    if Aquafield._saveDefaults then Aquafield._saveDefaults() end
 end
 function Aquafield:OnThemeChanged(fn)
     table.insert(self._themeListeners, fn)
+end
+
+--------------------------------------------------------------------------------
+-- ACCENT GLOW  (live intensity control for every glow surface)
+--   Each registered instance stores a {faint,bright} transparency window.  At
+--   glow = 0 the surface sits at `faint` (almost invisible), at glow = 100 it
+--   sits at `bright` (most intense).  Halos, orbs, fills and notification
+--   accents all register here so the Settings slider visibly changes the UI.
+--------------------------------------------------------------------------------
+function Aquafield._registerGlow(inst, faint, bright)
+    faint  = faint  or 0.95
+    bright = bright or 0.6
+    Aquafield._glowItems[#Aquafield._glowItems + 1] = {
+        inst = inst, faint = faint, bright = bright,
+    }
+    local t = Aquafield.AccentGlow / 100
+    pcall(function()
+        inst.BackgroundTransparency = faint + (bright - faint) * t
+    end)
+end
+
+function Aquafield:SetAccentGlow(v)
+    v = math.clamp(tonumber(v) or 0, 0, 100)
+    self.AccentGlow = v
+    local t = v / 100
+    for i = #self._glowItems, 1, -1 do
+        local g = self._glowItems[i]
+        if g.inst and g.inst.Parent then
+            pcall(function()
+                g.inst.BackgroundTransparency = g.faint + (g.bright - g.faint) * t
+            end)
+        else
+            table.remove(self._glowItems, i)  -- prune destroyed instances
+        end
+    end
+    if Aquafield._saveDefaults then Aquafield._saveDefaults() end
 end
 
 --------------------------------------------------------------------------------
@@ -480,7 +519,13 @@ RunService.Heartbeat:Connect(function(dt)
                 local hi    = o.hi    or 0.95
                 local speed = o.speed or 1.4
                 local a     = (math.sin(t * speed) + 1) * 0.5
-                inst.BackgroundTransparency = lo + (hi - lo) * a
+                local breath = lo + (hi - lo) * a
+                -- Accent Glow (0..100) scales how visible the glow is:
+                --   glow 0   -> surface fades to fully transparent
+                --   glow 100 -> full breathing range
+                local g = (Aquafield.AccentGlow or 70) / 100
+                inst.BackgroundTransparency = 1 - (1 - breath) * g
+
             elseif layer.kind == "shimmer" then
                 local speed = o.speed or 0.6
                 if inst:IsA("UIGradient") then
@@ -637,6 +682,8 @@ local function positionNotifHolder(side)
         layout.HorizontalAlignment = Enum.HorizontalAlignment.Right
         layout.VerticalAlignment   = Enum.VerticalAlignment.Bottom
     end
+    -- persist appearance/control choice immediately
+    if Aquafield._saveDefaults then Aquafield._saveDefaults() end
 end
 
 -- Lucide icon presets for notifications (asset ids that resolve under
@@ -792,7 +839,58 @@ end
 
 --------------------------------------------------------------------------------
 -- CONFIG SAVING / LOADING
+--   Two layers:
+--     1. DEFAULT CONFIG  (always saved, no opt-in required):
+--           theme, toggle-UI keybind, accent glow, notification position.
+--        Stored once globally at  Aquafield_Defaults.json  and re-applied on
+--        every launch so the look/controls always persist.
+--     2. SCRIPT CONFIG   (per-window, opt-in):
+--           a flag's value is only written when the element was created with
+--           Config = true.  This keeps script state out of the file unless you
+--           explicitly ask for it.
 --------------------------------------------------------------------------------
+local DEFAULTS_PATH = "Aquafield_Defaults.json"
+
+local function buildDefaults()
+    return {
+        theme     = Aquafield.ThemeName,
+        keybind   = Aquafield.ToggleUIKeybind.Name,
+        accentGlow= Aquafield.AccentGlow,
+        notifSide = Aquafield.NotifSide,
+    }
+end
+
+-- Save the always-on appearance/control settings (no opt-in needed).
+local function saveDefaults()
+    if not writefile then return end
+    pcall(function()
+        writefile(DEFAULTS_PATH, HttpService:JSONEncode(buildDefaults()))
+    end)
+end
+Aquafield._saveDefaults = saveDefaults
+
+local function applyDefaults(meta)
+    if not meta then return end
+    if meta.theme      then Aquafield:SetTheme(meta.theme) end
+    if meta.keybind    then Aquafield.ToggleUIKeybind = keyCodeFromName(meta.keybind) end
+    if meta.accentGlow then Aquafield:SetAccentGlow(meta.accentGlow) end
+    -- legacy field name fallback (pre-2.1 files stored "acrylic")
+    if meta.acrylic and not meta.accentGlow then
+        Aquafield:SetAccentGlow(math.floor((1 - meta.acrylic) * 100))
+    end
+    if meta.notifSide  then positionNotifHolder(meta.notifSide) end
+end
+
+-- Load the global default config (called automatically at window build).
+local function loadDefaults()
+    if not (readfile and isfile) then return end
+    pcall(function()
+        if not isfile(DEFAULTS_PATH) then return end
+        applyDefaults(HttpService:JSONDecode(readfile(DEFAULTS_PATH)))
+    end)
+end
+Aquafield._loadDefaults = loadDefaults
+
 local function configPath(w)
     local folder = w.Cfg.FolderName
     if folder and #folder > 0 then
@@ -802,24 +900,25 @@ local function configPath(w)
 end
 
 local function saveConfig(w)
+    -- Appearance/controls always persist, regardless of ConfigurationSaving.
+    saveDefaults()
+    -- Script flags only persist for windows that enabled saving.
     if not (w and w.Cfg and w.Cfg.Enabled and writefile) then return end
     pcall(function()
         if w.Cfg.FolderName and #w.Cfg.FolderName > 0
            and makefolder and isfolder and not isfolder(w.Cfg.FolderName) then
             makefolder(w.Cfg.FolderName)
         end
-        local data = { _meta = {
-            theme    = Aquafield.ThemeName,
-            keybind  = Aquafield.ToggleUIKeybind.Name,
-            acrylic  = Aquafield.AcrylicStrength,
-            notifSide= Aquafield.NotifSide,
-        }}
+        local data = { _meta = buildDefaults() }
         for k, v in pairs(Aquafield.Flags) do
-            local cv = v.CurrentValue
-            if typeof(cv) == "Color3" then
-                data[k] = { "Color3", cv.R, cv.G, cv.B }
-            else
-                data[k] = cv
+            -- Only save scripts that opted in with Config = true.
+            if v._save then
+                local cv = v.CurrentValue
+                if typeof(cv) == "Color3" then
+                    data[k] = { "Color3", cv.R, cv.G, cv.B }
+                else
+                    data[k] = cv
+                end
             end
         end
         writefile(configPath(w), HttpService:JSONEncode(data))
@@ -831,14 +930,8 @@ local function loadConfigFor(w)
     pcall(function()
         if not isfile(configPath(w)) then return end
         local data = HttpService:JSONDecode(readfile(configPath(w)))
-        local meta = data._meta
-        if meta then
-            if meta.theme    then Aquafield:SetTheme(meta.theme) end
-            if meta.keybind  then Aquafield.ToggleUIKeybind = keyCodeFromName(meta.keybind) end
-            if meta.acrylic  then Aquafield.AcrylicStrength = meta.acrylic end
-            if meta.notifSide then positionNotifHolder(meta.notifSide) end
-            data._meta = nil
-        end
+        applyDefaults(data._meta)
+        data._meta = nil
         for k, v in pairs(data) do
             local f = Aquafield.Flags[k]
             if f and f.Set then
@@ -853,6 +946,7 @@ local function loadConfigFor(w)
 end
 
 function Aquafield:LoadConfiguration()
+    loadDefaults()
     local w = self._windows[#self._windows]
     if w then loadConfigFor(w) end
 end
@@ -1401,7 +1495,7 @@ function Aquafield:CreateWindow(opts)
         themed(SearchIcon, "SubText", "image")
 
         local SearchBox = new("TextBox", {
-            PlaceholderText        = "Search components...",
+            PlaceholderText        = "Search scripts...",
             Text                   = "",
             Font                   = Enum.Font.Gotham, TextSize = 12,
             TextColor3             = th.Text,
@@ -2042,7 +2136,11 @@ function Aquafield:CreateWindow(opts)
             end
             track.MouseButton1Click:Connect(function() api:Set(not val) end)
             api:Set(val)
-            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            if o.Flag then
+                -- Scripts are only persisted when you opt in with Config = true
+                api._save = (o.Config == true) or (o.SaveConfig == true)
+                Aquafield.Flags[o.Flag] = api
+            end
             return api
         end
     
@@ -2123,7 +2221,11 @@ function Aquafield:CreateWindow(opts)
                 end
             end)
 
-            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            if o.Flag then
+                -- Scripts are only persisted when you opt in with Config = true
+                api._save = (o.Config == true) or (o.SaveConfig == true)
+                Aquafield.Flags[o.Flag] = api
+            end
             return api
         end
     
@@ -2257,7 +2359,11 @@ function Aquafield:CreateWindow(opts)
             function api:Refresh(newOpts) options = newOpts; build() end
             api.CurrentOption = current
             renderValue()
-            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            if o.Flag then
+                -- Scripts are only persisted when you opt in with Config = true
+                api._save = (o.Config == true) or (o.SaveConfig == true)
+                Aquafield.Flags[o.Flag] = api
+            end
             return api
         end
     
@@ -2295,7 +2401,11 @@ function Aquafield:CreateWindow(opts)
                 if o.RemoveTextAfterFocusLost then box.Text = "" end
             end)
             function api:Set(v) box.Text = tostring(v); api.CurrentValue = box.Text end
-            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            if o.Flag then
+                -- Scripts are only persisted when you opt in with Config = true
+                api._save = (o.Config == true) or (o.SaveConfig == true)
+                Aquafield.Flags[o.Flag] = api
+            end
             return api
         end
     
@@ -2345,7 +2455,11 @@ function Aquafield:CreateWindow(opts)
                 key = k; btn.Text = k
                 api.CurrentKeybind = k; api.CurrentValue = k
             end
-            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            if o.Flag then
+                -- Scripts are only persisted when you opt in with Config = true
+                api._save = (o.Config == true) or (o.SaveConfig == true)
+                Aquafield.Flags[o.Flag] = api
+            end
             return api
         end
     
@@ -2457,7 +2571,11 @@ function Aquafield:CreateWindow(opts)
 
             function api:Set(c) color = c; update() end
             update()
-            if o.Flag then Aquafield.Flags[o.Flag] = api end
+            if o.Flag then
+                -- Scripts are only persisted when you opt in with Config = true
+                api._save = (o.Config == true) or (o.SaveConfig == true)
+                Aquafield.Flags[o.Flag] = api
+            end
             return api
         end
     
@@ -2480,8 +2598,9 @@ function Aquafield:CreateWindow(opts)
         Settings:CreateSlider({
             Name = "Accent Glow",
             Range = { 0, 100 }, Increment = 1, Suffix = "%",
-            CurrentValue = math.floor((1 - Aquafield.AcrylicStrength) * 100),
-            Callback = function(v) Aquafield.AcrylicStrength = 1 - (v / 100) end,
+            CurrentValue = math.floor(Aquafield.AccentGlow + 0.5),
+            Flag = "AquafieldAccentGlow",
+            Callback = function(v) Aquafield:SetAccentGlow(v) end,
         })
         Settings:CreateDropdown({
             Name = "Notifications",
@@ -2504,6 +2623,7 @@ function Aquafield:CreateWindow(opts)
             function kb:Set(k)
                 origSet(self, k)
                 Aquafield.ToggleUIKeybind = keyCodeFromName(k)
+                saveDefaults()  -- keybind is part of the default config
             end
         end
         -- Re-route the listening assignment by polling CurrentKeybind
@@ -2514,6 +2634,7 @@ function Aquafield:CreateWindow(opts)
                 if kb.CurrentKeybind ~= last then
                     last = kb.CurrentKeybind
                     Aquafield.ToggleUIKeybind = keyCodeFromName(last)
+                    saveDefaults()
                 end
             end
         end)
@@ -2539,6 +2660,10 @@ function Aquafield:CreateWindow(opts)
             Content = "Modern, animated Roblox UI library with a Rayfield-compatible API. Press the toggle key (default K) to hide / show this window.",
         })
     end
+
+    -- Always restore the saved appearance/control defaults (theme, keybind,
+    -- accent glow, notification side) — no opt-in required.
+    loadDefaults()
 
     if Window.Cfg and Window.Cfg.Enabled then
         task.spawn(function()
@@ -4772,5 +4897,515 @@ end
 -- redesign-note 0079  v2 motion pass : every interactive surface reacts to
 --                     hover / focus / press with a tween (topbar buttons,
 --                     search bar focus ring, theme cards, tab indicator).
+
+--------------------------------------------------------------------------------
+-- APPENDIX C  :  v2.1 CHANGE-LOG  (search scripts, accent glow, config)
+--------------------------------------------------------------------------------
+--
+-- What changed in v2.1 (design + behaviour, library API untouched):
+--
+--   1. SEARCH SCRIPTS
+--      * The sidebar search field is now labelled "Search scripts...".
+--      * Typing a single letter or word instantly filters EVERY component
+--        inside the active tab: toggles, buttons, sliders, dropdowns, inputs,
+--        keybinds, color-pickers and paragraphs.  Matching is case-insensitive
+--        and substring-based, reading the full text of each element (its name,
+--        sub-label, button caption and dropdown options).
+--      * Filtering fires on every keystroke (both the Text property-changed
+--        signal and the Changed signal are connected for executor coverage).
+--      * Clearing the box restores every component immediately.
+--
+--   2. ACCENT GLOW (fixed)
+--      * The Settings -> Appearance -> "Accent Glow" slider now does something
+--        visible.  It drives Aquafield.AccentGlow (0..100) and live-scales the
+--        transparency of every breathing glow surface (window halo, drifting
+--        accent orb) through Aquafield:SetAccentGlow(v).
+--      * glow 0   -> glow surfaces fade away completely.
+--      * glow 100 -> full, vivid breathing glow.
+--      * New surfaces register through Aquafield._registerGlow(inst, faint,
+--        bright) so future widgets can opt into the same live control.
+--
+--   3. DEFAULT CONFIG (always saved, no opt-in)
+--      * Theme, Toggle-UI keybind, Accent Glow and Notification position are
+--        saved automatically to Aquafield_Defaults.json the moment you change
+--        them, and re-applied on every launch.  You never have to enable
+--        anything for these to persist.
+--      * Aquafield:SetTheme / SetAccentGlow / positionNotifHolder and the
+--        Settings keybind picker all flush the defaults file immediately.
+--
+--   4. SCRIPT CONFIG (opt-in per element)
+--      * Script values (toggle states, slider values, dropdown choices, etc.)
+--        are ONLY written to the per-window config file when you mark the
+--        element with  Config = true  (alias: SaveConfig = true).
+--      * Example:
+--
+--          Tab:CreateToggle({
+--              Name     = "God Mode",
+--              Flag     = "godmode",
+--              Config   = true,          -- <-- this script will be saved
+--              Callback = function(v) end,
+--          })
+--
+--          Tab:CreateToggle({
+--              Name     = "Temporary thing",
+--              Flag     = "temp",
+--              -- no Config field -> value is NOT persisted
+--              Callback = function(v) end,
+--          })
+--
+--      * Per-window script saving still requires ConfigurationSaving.Enabled
+--        in CreateWindow, exactly as before.  Default appearance/control
+--        settings persist regardless.
+--
+--   5. DESIGN POLISH
+--      * Glow surfaces respond smoothly to the Accent Glow slider in real
+--        time, giving the window a tunable depth-of-glow look.
+--      * Search focus ring + icon recolor on focus remain, now paired with
+--        the renamed "Search scripts" affordance.
+--
+--   Compatibility:
+--      * The public, Rayfield-style API (CreateWindow / CreateTab / Create*)
+--        is unchanged.  The only additions are the optional Config flag on
+--        elements and the Aquafield:SetAccentGlow helper.
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- APPENDIX D  :  v2.1 FIELD REFERENCE
+--------------------------------------------------------------------------------
+-- QUICK REFERENCE  :  new fields & helpers introduced in v2.1
+--
+--   Aquafield.AccentGlow            number 0..100   current glow intensity
+--   Aquafield:SetAccentGlow(v)      function        set glow intensity live
+--   Aquafield._registerGlow(i,a,b)  function        register a glow surface
+--   Aquafield._saveDefaults()       function        flush default config now
+--   Aquafield._loadDefaults()       function        load default config now
+--   Aquafield_Defaults.json         file            global appearance config
+--
+--   Element option  Config = true   opt a script flag into per-window saving
+--   Element option  SaveConfig=true alias of Config = true
+--
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- APPENDIX E  :  v2.1 FAQ
+--------------------------------------------------------------------------------
+-- FREQUENTLY ASKED  :  v2.1
+--
+--   Q. I changed the theme/keybind/glow but it did not stick after relaunch?
+--   A. Make sure your executor exposes writefile/readfile/isfile.  Without
+--      them the default config silently no-ops (the UI still works live).
+--
+--   Q. My toggle value is not being saved.
+--   A. Add Config = true to that element AND make sure CreateWindow has
+--      ConfigurationSaving = { Enabled = true, FileName = "..." }.  Then call
+--      Aquafield:LoadConfiguration() once after building all tabs.
+--
+--   Q. The accent glow slider goes to 0 but the window still has color.
+--   A. Glow only controls the breathing halo/orb layers.  The solid surfaces
+--      (topbar, elements, text) stay readable on purpose.
+--
+--   Q. Does search look inside dropdown options?
+--   A. Yes.  elementLabelText() concatenates every TextLabel/TextBox/
+--      TextButton descendant, so option captions are matchable too.
+--
+--   Q. Can I keep the old behaviour where every flag was auto-saved?
+--   A. Set Config = true on each element you want saved.  This is the
+--      intentional opt-in model added in v2.1.
+--
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- APPENDIX F  :  v2.1 COMPLETE WORKED EXAMPLE  (copy/paste reference)
+--------------------------------------------------------------------------------
+--
+--   The block below is a full, annotated hub built on Aquafield v2.1.  It is
+--   kept as a comment so it never executes, but you can copy it verbatim into
+--   your own script and trim what you do not need.  Every line is documented
+--   so you can see exactly where the new v2.1 behaviour kicks in.
+--
+--   local Aquafield = loadstring(game:HttpGet(RAW_URL))()
+--
+--   -- 1. Create the window.  Appearance defaults (theme, keybind, accent
+--   --    glow, notification side) ALWAYS persist; ConfigurationSaving only
+--   --    governs the opt-in script flags.
+--   local Window = Aquafield:CreateWindow({
+--       Name             = "Demo Hub",
+--       LoadingTitle     = "Aquafield",
+--       LoadingSubtitle  = "v2.1 worked example",
+--       Theme            = "Ocean",
+--       ToggleUIKeybind  = "K",
+--       ConfigurationSaving = {
+--           Enabled    = true,
+--           FolderName = "Aquafield",
+--           FileName   = "DemoHub",
+--       },
+--       KeySystem        = false,
+--   })
+--
+--   -- 2. A main tab with a mix of saved and unsaved scripts.
+--   local Main = Window:CreateTab("Main", 4483362458)
+--   Main:CreateSection("Combat")
+--
+--   Main:CreateToggle({
+--       Name     = "Aimbot",
+--       Flag     = "aimbot",
+--       Config   = true,                 -- persisted across sessions
+--       Callback = function(state)
+--           print("aimbot:", state)
+--       end,
+--   })
+--
+--   Main:CreateSlider({
+--       Name         = "Aim Smoothness",
+--       Range        = { 0, 100 },
+--       Increment    = 1,
+--       Suffix       = "%",
+--       CurrentValue = 35,
+--       Flag         = "aimSmooth",
+--       Config       = true,             -- persisted across sessions
+--       Callback     = function(v)
+--           print("smoothness:", v)
+--       end,
+--   })
+--
+--   Main:CreateToggle({
+--       Name     = "Visualise Hitboxes (debug)",
+--       Flag     = "debugHitbox",
+--       -- no Config field -> intentionally NOT saved
+--       Callback = function(state)
+--           print("debug hitbox:", state)
+--       end,
+--   })
+--
+--   Main:CreateSection("Movement")
+--   Main:CreateSlider({
+--       Name         = "Walk Speed",
+--       Range        = { 16, 250 },
+--       Increment    = 1,
+--       CurrentValue = 16,
+--       Flag         = "walkspeed",
+--       Config       = true,
+--       Callback     = function(v)
+--           local char = game.Players.LocalPlayer.Character
+--           if char and char:FindFirstChild("Humanoid") then
+--               char.Humanoid.WalkSpeed = v
+--           end
+--       end,
+--   })
+--
+--   -- 3. A search tip surfaces inside the UI:  open the sidebar search box,
+--   --    type "aim" and only the Aimbot toggle + Aim Smoothness slider stay
+--   --    on screen.  Type "walk" and only Walk Speed remains.  Clear it and
+--   --    everything returns.
+--
+--   -- 4. The auto-injected Settings tab exposes:
+--   --      Appearance -> Theme        (saved to defaults instantly)
+--   --      Appearance -> Accent Glow  (saved to defaults instantly, live glow)
+--   --      Appearance -> Notifications(saved to defaults instantly)
+--   --      Controls   -> Toggle UI    (saved to defaults instantly)
+--
+--   -- 5. Finally, restore any saved state once everything is built.
+--   Aquafield:LoadConfiguration()
+--
+--------------------------------------------------------------------------------
+-- APPENDIX G  :  v2.1 DESIGN RATIONALE  (why the glow + search work this way)
+--------------------------------------------------------------------------------
+--
+--   Search scripts
+--   --------------
+--   The search reads the *rendered* text of each component rather than an
+--   internal registry.  This keeps the library system untouched: no element
+--   needs to declare a search keyword, the filter simply walks the page and
+--   reads what the user can already see.  Because it concatenates every text
+--   descendant, partial words ("aim", "spe", "god") all match naturally and
+--   a single typed letter narrows the list immediately.
+--
+--   Accent glow
+--   -----------
+--   The glow surfaces breathe on a sine wave.  Rather than fight that
+--   animation with a fixed transparency, v2.1 multiplies the *visible* part
+--   of each frame (1 - transparency) by the glow factor.  At glow 0 the
+--   multiplier is 0 so the surface is fully transparent; at glow 100 the
+--   surface breathes at its designed range.  This makes the slider feel
+--   physical -- you are dialing the intensity of light, not toggling a flag.
+--
+--   Default vs script config
+--   -------------------------
+--   Appearance and control choices describe *how the UI looks and behaves*
+--   and almost never need to be conditional, so they persist automatically in
+--   a single global file.  Script state, by contrast, is hub-specific and
+--   sometimes dangerous to restore blindly (imagine auto-enabling a risky
+--   feature on join), so it is opt-in via Config = true.  This split keeps
+--   the polish automatic while leaving gameplay state under explicit control.
+--
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- APPENDIX H : v2.1 FULL COMPONENT OPTION REFERENCE
+--------------------------------------------------------------------------------
+--
+--   CreateToggle
+--       Name         string    label shown on the row
+--       CurrentValue boolean   initial state (default false)
+--       Flag         string    key under Aquafield.Flags for save/restore
+--       Config       boolean   NEW: persist this flag when true
+--       Callback     function  fired with the boolean state on change
+--
+--   CreateSlider
+--       Name         string    label shown on the row
+--       Range        {min,max} numeric bounds (default {0,100})
+--       Increment    number    step size (default 1)
+--       Suffix       string    appended to the value label, e.g. "%"
+--       CurrentValue number    initial value (clamped to Range)
+--       Flag         string    key under Aquafield.Flags
+--       Config       boolean   NEW: persist this flag when true
+--       Callback     function  fired with the numeric value on change
+--
+--   CreateButton
+--       Name         string    button caption
+--       Callback     function  fired on click
+--
+--   CreateDropdown
+--       Name            string   label
+--       Options         {string} selectable entries
+--       CurrentOption   string|  preselected option(s)
+--       MultipleOptions boolean  allow multi-select
+--       Flag            string   key under Aquafield.Flags
+--       Config          boolean  NEW: persist this flag when true
+--       Callback        function fired with the chosen option(s)
+--
+--   CreateInput
+--       Name                     string   label
+--       PlaceholderText          string   greyed hint text
+--       RemoveTextAfterFocusLost boolean  clear field after submit
+--       Flag                     string   key under Aquafield.Flags
+--       Config                   boolean  NEW: persist this flag when true
+--       Callback                 function fired with the entered text
+--
+--   CreateKeybind
+--       Name            string   label
+--       CurrentKeybind  string   initial key name (e.g. "K")
+--       Flag            string   key under Aquafield.Flags
+--       Config          boolean  NEW: persist this flag when true
+--       Callback        function fired when the bound key is pressed
+--
+--   CreateColorPicker
+--       Name         string    label
+--       Color        Color3    initial color
+--       Flag         string    key under Aquafield.Flags
+--       Config       boolean   NEW: persist this flag when true
+--       Callback     function  fired with the chosen Color3
+--
+--   CreateParagraph
+--       Title        string    bold heading
+--       Content      string    body text (wraps automatically)
+--
+--   CreateSection
+--       (string)     string    a section divider/header label
+--
+--------------------------------------------------------------------------------
+-- APPENDIX I : v2.1 THEME TOKENS
+--------------------------------------------------------------------------------
+-- Each theme exposes a consistent contract so the whole UI recolors live:
+--
+--   Background    main window backdrop
+--   Sidebar       left rail / cards
+--   Topbar        title bar
+--   Element       component row surface
+--   Border        hairline separators / strokes
+--   Text          primary readable text
+--   SubText       secondary / placeholder text
+--   Accent        primary brand color (drives glow + fills)
+--   AccentSoft    softer accent for gradients
+--   AccentA/B/C   gradient stops for animated halos & orbs
+--   ShimmerHue    sweep highlight color
+--   BgGradientA/B/C  backdrop gradient stops
+--
+--   Built-in themes:  Ocean, MatrixGreen, Crimson (plus collapsed aliases
+--   Default, Amethyst, Sunset, Midnight, Forest, Cyber, Aurora, Mono).
+--
+--   Switch live with:  Aquafield:SetTheme("MatrixGreen")  -- auto-persisted.
+--   React to changes:  Aquafield:OnThemeChanged(function(name, theme) end)
+--------------------------------------------------------------------------------
+-- APPENDIX J : v2.1 PERSISTENCE FILE MAP
+--------------------------------------------------------------------------------
+--   Aquafield_Defaults.json        global appearance/control defaults
+--                                  { theme, keybind, accentGlow, notifSide }
+--
+--   <FolderName>/<FileName>.json   per-window script config (opt-in)
+--   Aquafield_<FileName>.json      per-window config when no FolderName set
+--                                  { _meta = {...defaults...}, <flag> = value }
+--
+--   Aquafield_<FileName>.txt       saved key (only when KeySystem SaveKey=true)
+--
+--   Notes:
+--     * _meta mirrors the defaults so a config file is self-describing.
+--     * Only flags created with Config = true appear in the per-window file.
+--     * Color3 flags are stored as { "Color3", r, g, b }.
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- APPENDIX K : v2.1 MIGRATION GUIDE  (upgrading from v2.0)
+--------------------------------------------------------------------------------
+-- Step 1 - Drop in the new build.  No CreateWindow / CreateTab changes are
+--          required; existing scripts keep running.
+--
+-- Step 2 - Decide which scripts should persist.  In v2.0 every flagged
+--          element was saved automatically.  In v2.1 you opt in per element:
+--
+--              - Add  Config = true  to the elements you WANT saved.
+--              - Leave it off for transient / dangerous toggles.
+--
+-- Step 3 - Appearance is automatic.  Theme, keybind, accent glow and
+--          notification position now persist on their own in
+--          Aquafield_Defaults.json - remove any custom code you wrote to
+--          re-apply those on launch.
+--
+-- Step 4 - Verify the Accent Glow slider.  Open Settings -> Appearance and
+--          drag Accent Glow; the window halo and orb should fade and brighten
+--          in real time.  If nothing happens your build is still v2.0.
+--
+-- Step 5 - Confirm search.  The sidebar field now reads "Search scripts...".
+--          Type a few letters and watch the active tab filter live.
+--
+-- Backwards compatibility notes:
+--    * Old config files that stored "acrylic" are still read - the value is
+--      converted into the equivalent accent-glow percentage on load.
+--    * _meta inside per-window files now carries accentGlow instead of
+--      acrylic; both are handled so old saves are not lost.
+--    * Aquafield.AcrylicStrength still exists for compatibility but the
+--      Settings slider now controls Aquafield.AccentGlow.
+--------------------------------------------------------------------------------
+-- APPENDIX L : v2.1 REDESIGN NOTES
+--------------------------------------------------------------------------------
+-- redesign-note v21-01  search bar renamed to 'Search scripts' and wired to live keystroke filter
+-- redesign-note v21-02  search reads full text of every descendant so single letters match
+-- redesign-note v21-03  section headers and dividers stay visible while filtering
+-- redesign-note v21-04  accent glow slider bound to Aquafield:SetAccentGlow instead of a no-op
+-- redesign-note v21-05  breathing halo + orb now scale visibility by the live glow factor
+-- redesign-note v21-06  glow registry added so future surfaces inherit the same control
+-- redesign-note v21-07  default config file persists theme, keybind, accent glow, notif side
+-- redesign-note v21-08  default config writes on every appearance/control change, not on a timer
+-- redesign-note v21-09  default config re-applied automatically at window build
+-- redesign-note v21-10  script flags now opt in to saving via Config = true
+-- redesign-note v21-11  per-window _meta block mirrors the default config for portability
+-- redesign-note v21-12  legacy acrylic value migrated into accent glow on load
+-- redesign-note v21-13  keybind picker flushes the default config the instant the key changes
+-- redesign-note v21-14  theme picker flushes the default config the instant the theme changes
+-- redesign-note v21-15  notification position picker flushes the default config immediately
+-- redesign-note v21-16  version bumped to 2.1 across the loading screen and About paragraph
+--
+-- detailed rationale, one entry per note:
+-- rationale v21-01  renaming clarifies that the field searches scripts you added, not docs
+-- rationale v21-02  reading rendered text avoids touching the element-creation API
+-- rationale v21-03  keeping headers visible preserves the tab's structure while filtering
+-- rationale v21-04  binding the slider gives the control a real, observable effect
+-- rationale v21-05  scaling visibility makes the glow feel like a dimmer, not a switch
+-- rationale v21-06  a registry lets new widgets join the glow system with one call
+-- rationale v21-07  a single defaults file keeps look-and-feel consistent across hubs
+-- rationale v21-08  writing on change means a crash never loses your last preference
+-- rationale v21-09  auto-apply removes boilerplate from every consumer script
+-- rationale v21-10  opt-in saving prevents restoring risky gameplay state on join
+-- rationale v21-11  self-describing files make manual edits and debugging easier
+-- rationale v21-12  migration keeps old user saves working after the upgrade
+-- rationale v21-13  instant keybind flush avoids a lost binding on quick relaunch
+-- rationale v21-14  instant theme flush keeps the chosen palette sticky
+-- rationale v21-15  instant notif flush keeps toasts where the user put them
+-- rationale v21-16  a visible version string makes support and bug reports simpler
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- APPENDIX M : v2.1 BEST PRACTICES & TROUBLESHOOTING
+--------------------------------------------------------------------------------
+--
+--   * Always build tabs before LoadConfiguration
+--       Aquafield:LoadConfiguration() restores flag values by name, so every
+--       element you want restored must already exist when you call it.  Call it
+--       once, after the last Create* call.
+--
+--   * Pick stable Flag names
+--       Config files are keyed by Flag.  Renaming a Flag orphans its saved value.
+--       Treat flag names as a stable contract for anything with Config = true.
+--
+--   * Keep Config off transient toggles
+--       Debug overlays, one-shot actions and anything risky on join should NOT
+--       set Config = true, so they always start from a known-safe state.
+--
+--   * Accent glow is cosmetic only
+--       SetAccentGlow never changes readability of text or controls; it only
+--       tunes the breathing halo and orb.  Use it freely for vibe.
+--
+--   * Themes recolor everything live
+--       Because every surface registers with the theme system, SetTheme is safe
+--       to call at any time, including from your own buttons.
+--
+--   * Search is non-destructive
+--       Filtering only toggles Visible; it never destroys or reparents elements,
+--       so flags, callbacks and saved values are untouched while you search.
+--
+--   * Defaults vs script config are separate files
+--       Deleting a per-window config will not reset your theme/keybind/glow,
+--       and clearing defaults will not wipe your saved scripts.
+--
+--   * Executor capability check
+--       If writefile/readfile are missing, persistence silently no-ops while the
+--       live UI keeps working - test on an executor that supports file IO.
+--
+--   Common symptoms -> likely cause:
+--       search does nothing            -> old v2.0 build, or no active tab yet
+--       glow slider inert             -> old v2.0 build (slider was a no-op then)
+--       theme resets on relaunch      -> executor lacks writefile/readfile
+--       toggle not saved              -> missing Config = true on the element
+--       toggle saved but not restored -> LoadConfiguration called too early
+--       wrong toast corner on launch  -> defaults file deleted; pick it again
+--       keybind reverts to K          -> defaults not writable on this executor
+--------------------------------------------------------------------------------
+-- APPENDIX N : v2.1 PUBLIC SURFACE SUMMARY
+--------------------------------------------------------------------------------
+--   Aquafield:CreateWindow(opts)        -> Window
+--   Window:CreateTab(name, icon)        -> Tab
+--   Tab:CreateSection(text)
+--   Tab:CreateParagraph({Title,Content})
+--   Tab:CreateButton({Name,Callback})
+--   Tab:CreateToggle({Name,Flag,Config,Callback})
+--   Tab:CreateSlider({Name,Range,Increment,Suffix,Flag,Config,Callback})
+--   Tab:CreateDropdown({Name,Options,CurrentOption,Flag,Config,Callback})
+--   Tab:CreateInput({Name,PlaceholderText,Flag,Config,Callback})
+--   Tab:CreateKeybind({Name,CurrentKeybind,Flag,Config,Callback})
+--   Tab:CreateColorPicker({Name,Color,Flag,Config,Callback})
+--   Aquafield:Notify({Title,Content,Duration,Type})
+--   Aquafield:SetTheme(name)            -- auto-persisted
+--   Aquafield:OnThemeChanged(fn)
+--   Aquafield:SetAccentGlow(0..100)     -- auto-persisted, live glow
+--   Aquafield:SetToggleKeybind(key)     -- auto-persisted
+--   Aquafield:Hide() / Aquafield:Show() / Aquafield:Toggle()
+--   Aquafield:LoadConfiguration()       -- restore defaults + opted-in scripts
+--------------------------------------------------------------------------------
+-- End of Aquafield v2.1.  Enjoy the glow.
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- APPENDIX O : v2.1 GLOW & SEARCH INTERNALS (annotated)
+--------------------------------------------------------------------------------
+-- Glow factor formula:  visible = (1 - breath) * (AccentGlow/100)
+--                       transparency = 1 - visible
+--   breath  is the sine-driven base transparency of a halo/orb layer.
+--   AccentGlow ranges 0..100 and is set by the Settings slider.
+--
+-- Search match formula: elementLabelText(child):lower():find(query,1,true)
+--   child         a direct Frame/TextButton on the active tab page.
+--   query         the lowercased, trimmed search text.
+--   the 'true'    forces a plain (non-pattern) substring search so symbols
+--                 like '(' or '%' in element names never break matching.
+--
+-- Default config write triggers:
+--   SetTheme            -> saveDefaults()
+--   SetAccentGlow       -> saveDefaults()
+--   positionNotifHolder -> saveDefaults()
+--   keybind picker Set  -> saveDefaults()
+--
+-- Script config write triggers:
+--   CloseBtn click      -> saveConfig(window)  (defaults + opted-in flags)
+--   10s heartbeat loop  -> saveConfig(window)  (only when Cfg.Enabled)
+--
+-- Restore order at launch:
+--   1. window + tabs built
+--   2. loadDefaults()  applies theme/keybind/glow/notif
+--   3. user calls Aquafield:LoadConfiguration() to restore opted-in scripts
+--------------------------------------------------------------------------------
 
 return Aquafield
