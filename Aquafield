@@ -1,49 +1,3 @@
---[[
-    Aquafield Interface Suite  --  ENHANCED EDITION v2.0
-    ============================================================
-    A polished Roblox UI library with a Rayfield-compatible API.
-
-    What is new in v2.0:
-      *  Glassmorphism surfaces with animated gradient halo
-      *  Particle field background (subtle floating dots)
-      *  Glow-on-hover for every interactive element
-      *  Spring-style entrance animations
-      *  10 hand-tuned themes (Ocean, Crimson, MatrixGreen,
-         Amethyst, Sunset, Midnight, Forest, Cyber, Aurora, Mono)
-      *  Built-in Settings tab (auto-injected) with:
-            - Theme picker
-            - Toggle-UI keybind picker  (default: K)
-            - Acrylic blur slider
-            - Notification position picker
-      *  Rich notification stack (toast w/ progress, icon, accent)
-      *  Keybind-driven open/close of the entire window
-
-    Rayfield-compatible drop-in usage:
-
-        local Aquafield = loadstring(game:HttpGet("RAW_URL"))()
-
-        local Window = Aquafield:CreateWindow({
-            Name             = "My Hub",
-            LoadingTitle     = "Aquafield",
-            LoadingSubtitle  = "Interface Suite",
-            Theme            = "Ocean",        -- see ThemeNames
-            ToggleUIKeybind  = "K",            -- NEW (default)
-            ConfigurationSaving = {
-                Enabled   = true,
-                FolderName= "Aquafield",
-                FileName  = "MyHub",
-            },
-            KeySystem        = false,
-        })
-
-        local Tab = Window:CreateTab("Main", 4483362458)
-        Tab:CreateButton({ Name = "Hi", Callback = function() end })
-        Aquafield:LoadConfiguration()
-]]
-
---------------------------------------------------------------------------------
--- SERVICES
---------------------------------------------------------------------------------
 local CoreGui          = game:GetService("CoreGui")
 local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -55,7 +9,6 @@ local Workspace        = game:GetService("Workspace")
 
 local LP = Players.LocalPlayer
 
---------------------------------------------------------------------------------
 -- THEMES  (3 hand-tuned, gradient-aware palettes)
 --   Every theme exposes a full color contract:
 --     * Solid surface tokens (Background, Sidebar, Topbar, Element, etc.)
@@ -66,7 +19,6 @@ local LP = Players.LocalPlayer
 --   shimmer sweeps, breathing halos, ripple bursts) so that switching
 --   theme instantly recolors the *entire* interface live, including
 --   the moving animated layers.
---------------------------------------------------------------------------------
 local Themes = {}
 
 -- =========================================================================
@@ -168,9 +120,6 @@ Themes.Mono          = Themes.Ocean        -- collapsed alias
 
 local ThemeNames = { "Ocean", "MatrixGreen", "Crimson" }
 
---------------------------------------------------------------------------------
--- LIBRARY ROOT
---------------------------------------------------------------------------------
 local Aquafield = {
     Flags           = {},
     Theme           = Themes.Ocean,
@@ -184,9 +133,7 @@ local Aquafield = {
     _version        = "2.0",
 }
 
---------------------------------------------------------------------------------
 -- CORE HELPERS  (instance, tween, corner, stroke, etc.)
---------------------------------------------------------------------------------
 local function new(class, props, children)
     local inst = Instance.new(class)
     for k, v in pairs(props or {}) do inst[k] = v end
@@ -272,9 +219,7 @@ local function keyCodeFromName(name)
     return Enum.KeyCode.K
 end
 
---------------------------------------------------------------------------------
 -- THEME REGISTRY  (live-recolor every themed instance)
---------------------------------------------------------------------------------
 local function themed(inst, key, role)
     Aquafield._themed[#Aquafield._themed + 1] = { inst = inst, key = key, role = role or "bg" }
 end
@@ -310,9 +255,6 @@ function Aquafield:OnThemeChanged(fn)
     table.insert(self._themeListeners, fn)
 end
 
---------------------------------------------------------------------------------
--- DRAGGABLE WINDOWS
---------------------------------------------------------------------------------
 local function makeDraggable(frame, handle)
     handle = handle or frame
     local dragging, dragStart, startPos
@@ -341,9 +283,7 @@ local function makeDraggable(frame, handle)
     end)
 end
 
---------------------------------------------------------------------------------
 -- ROOT SCREENGUI  (with safe parent detection)
---------------------------------------------------------------------------------
 local function getGuiParent()
     local ok, hui = pcall(function() return gethui and gethui() end)
     if ok and hui then return hui end
@@ -365,9 +305,7 @@ local ScreenGui = new("ScreenGui", {
     Parent           = getGuiParent(),
 })
 
---------------------------------------------------------------------------------
 -- AMBIENT PARTICLE FIELD  (decorative, very light cost)
---------------------------------------------------------------------------------
 local ParticleLayer
 local Particles = {}
 
@@ -412,7 +350,6 @@ local function startParticleField(parent)
     end)
 end
 
---------------------------------------------------------------------------------
 -- FX ENGINE  (animated theme gradients, breathing halos, shimmer sweeps)
 --   The FX engine is a single RunService.Heartbeat loop that walks a
 --   registry of "animated layers" and updates them every frame.  Layers
@@ -430,7 +367,6 @@ end
 --   Performance: a single Heartbeat connection drives all layers, with
 --   automatic culling of destroyed hosts.  Cost on a typical window
 --   (~6 layers) is well under 0.05ms / frame on modern hardware.
---------------------------------------------------------------------------------
 Aquafield._fxLayers = {}
 
 local function fxRegister(kind, inst, opts)
@@ -593,9 +529,7 @@ local function buildShimmerGradient(parent)
     return s
 end
 
---------------------------------------------------------------------------------
 -- NOTIFICATIONS  (toast stack, themed, with progress bar)
---------------------------------------------------------------------------------
 local NotifHolder = new("Frame", {
     Name             = "Notifications",
     AnchorPoint      = Vector2.new(1, 1),
@@ -790,9 +724,45 @@ function Aquafield:Notify(opts)
     end)
 end
 
---------------------------------------------------------------------------------
--- CONFIG SAVING / LOADING
---------------------------------------------------------------------------------
+local AQUAFIELD_PREFS_FOLDER = "Aquafield"
+local AQUAFIELD_PREFS_FILE   = "Aquafield/_Preferences.json"
+
+local function ensureAquafieldFolder()
+    if makefolder and isfolder and not isfolder(AQUAFIELD_PREFS_FOLDER) then
+        pcall(makefolder, AQUAFIELD_PREFS_FOLDER)
+    end
+end
+
+local function saveAquafieldPrefs()
+    if not writefile then return end
+    pcall(function()
+        ensureAquafieldFolder()
+        local prefs = {
+            theme     = Aquafield.ThemeName,
+            keybind   = Aquafield.ToggleUIKeybind and Aquafield.ToggleUIKeybind.Name or "K",
+            acrylic   = Aquafield.AcrylicStrength,
+            notifSide = Aquafield.NotifSide,
+        }
+        writefile(AQUAFIELD_PREFS_FILE, HttpService:JSONEncode(prefs))
+    end)
+end
+
+local function loadAquafieldPrefs()
+    if not (readfile and isfile) then return end
+    pcall(function()
+        if not isfile(AQUAFIELD_PREFS_FILE) then return end
+        local prefs = HttpService:JSONDecode(readfile(AQUAFIELD_PREFS_FILE))
+        if type(prefs) ~= "table" then return end
+        if prefs.theme     then Aquafield:SetTheme(prefs.theme) end
+        if prefs.keybind   then Aquafield.ToggleUIKeybind = keyCodeFromName(prefs.keybind) end
+        if prefs.acrylic   then Aquafield.AcrylicStrength = prefs.acrylic end
+        if prefs.notifSide then positionNotifHolder(prefs.notifSide) end
+    end)
+end
+
+Aquafield._SavePrefs = saveAquafieldPrefs
+Aquafield._LoadPrefs = loadAquafieldPrefs
+
 local function configPath(w)
     local folder = w.Cfg.FolderName
     if folder and #folder > 0 then
@@ -802,18 +772,14 @@ local function configPath(w)
 end
 
 local function saveConfig(w)
+    saveAquafieldPrefs()
     if not (w and w.Cfg and w.Cfg.Enabled and writefile) then return end
     pcall(function()
         if w.Cfg.FolderName and #w.Cfg.FolderName > 0
            and makefolder and isfolder and not isfolder(w.Cfg.FolderName) then
             makefolder(w.Cfg.FolderName)
         end
-        local data = { _meta = {
-            theme    = Aquafield.ThemeName,
-            keybind  = Aquafield.ToggleUIKeybind.Name,
-            acrylic  = Aquafield.AcrylicStrength,
-            notifSide= Aquafield.NotifSide,
-        }}
+        local data = {}
         for k, v in pairs(Aquafield.Flags) do
             local cv = v.CurrentValue
             if typeof(cv) == "Color3" then
@@ -827,18 +793,13 @@ local function saveConfig(w)
 end
 
 local function loadConfigFor(w)
+    loadAquafieldPrefs()
     if not (w and w.Cfg and w.Cfg.Enabled and readfile and isfile) then return end
     pcall(function()
         if not isfile(configPath(w)) then return end
         local data = HttpService:JSONDecode(readfile(configPath(w)))
-        local meta = data._meta
-        if meta then
-            if meta.theme    then Aquafield:SetTheme(meta.theme) end
-            if meta.keybind  then Aquafield.ToggleUIKeybind = keyCodeFromName(meta.keybind) end
-            if meta.acrylic  then Aquafield.AcrylicStrength = meta.acrylic end
-            if meta.notifSide then positionNotifHolder(meta.notifSide) end
-            data._meta = nil
-        end
+        if type(data) ~= "table" then return end
+        data._meta = nil
         for k, v in pairs(data) do
             local f = Aquafield.Flags[k]
             if f and f.Set then
@@ -857,9 +818,7 @@ function Aquafield:LoadConfiguration()
     if w then loadConfigFor(w) end
 end
 
---------------------------------------------------------------------------------
 -- LOADING SCREEN  (animated splash w/ gradient bar)
---------------------------------------------------------------------------------
 local function showLoadingScreen(title, subtitle, theme)
     local th = theme
     local frame = new("Frame", {
@@ -932,9 +891,6 @@ local function showLoadingScreen(title, subtitle, theme)
     end)
 end
 
---------------------------------------------------------------------------------
--- KEY SYSTEM
---------------------------------------------------------------------------------
 local function runKeySystem(settings, theme, onSuccess)
     local th = theme
     local keys = settings.Key or {}
@@ -1017,9 +973,7 @@ local function runKeySystem(settings, theme, onSuccess)
     end)
 end
 
---------------------------------------------------------------------------------
 -- TOGGLE-UI VISIBILITY  (default keybind: K, user-changeable)
---------------------------------------------------------------------------------
 local function setUIVisible(visible)
     Aquafield._hidden = not visible
     for _, w in ipairs(Aquafield._windows) do
@@ -1082,9 +1036,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
---------------------------------------------------------------------------------
--- WINDOW BUILDER
---------------------------------------------------------------------------------
 function Aquafield:CreateWindow(opts)
     opts = opts or {}
 
@@ -1247,7 +1198,6 @@ function Aquafield:CreateWindow(opts)
         })
         themed(Title, "Text", "text")
 
-        --------------------------------------------------------------
         -- TOPBAR ICON BUTTONS  (lucide-roblox image assets)
         --   Replaces the previous garbled UTF-8 glyphs that the
         --   GothamBold font could not render.  Each button is now an
@@ -1260,7 +1210,6 @@ function Aquafield:CreateWindow(opts)
         --     X       (close)     -> rbxassetid://10747384394
         --     Minus   (minimize)  -> rbxassetid://10734950309
         --     EyeOff  (hide)      -> rbxassetid://10747384376
-        --------------------------------------------------------------
         local LUCIDE = {
             close    = "rbxassetid://10747384394",
             minimize = "rbxassetid://10734950309",
@@ -1356,13 +1305,10 @@ function Aquafield:CreateWindow(opts)
             BackgroundColor3 = th.Border,
             BorderSizePixel = 0, Parent = Side })
 
-        --------------------------------------------------------------
         -- SIDEBAR  :  Search bar (top)   +   tab list   +   theme studio
-        --------------------------------------------------------------
         -- Search Box (filters every component inside the active tab,
         -- by walking the page's children and reading their first
         -- TextLabel descendant).  Library API is untouched.
-        --------------------------------------------------------------
         local SearchHolder = new("Frame", {
             Size                  = UDim2.new(1, -16, 0, 30),
             Position              = UDim2.new(0, 8, 0, 8),
@@ -1436,9 +1382,7 @@ function Aquafield:CreateWindow(opts)
 
         Window._SearchBox = SearchBox
 
-        --------------------------------------------------------------
         -- TAB LIST  (shifted down for the search bar)
-        --------------------------------------------------------------
         local SideList = new("Frame", {
             Size                  = UDim2.new(1, 0, 1, -198),
             Position              = UDim2.new(0, 0, 0, 46),
@@ -1452,12 +1396,9 @@ function Aquafield:CreateWindow(opts)
             Parent    = SideList,
         })
 
-        --------------------------------------------------------------
-        -- THEME STUDIO
         --   Title "THEME" above the cards, active-name label below,
         --   3 large gradient cards (Ocean / MatrixGreen / Crimson),
         --   each with a pulsing accent ring + soft shimmer on hover.
-        --------------------------------------------------------------
         local ThemeStudio = new("Frame", {
             AnchorPoint            = Vector2.new(0, 1),
             Position               = UDim2.new(0, 0, 1, -6),
@@ -1627,9 +1568,6 @@ function Aquafield:CreateWindow(opts)
         Window._refreshThemeCards()
         Aquafield:OnThemeChanged(function() Window._refreshThemeCards() end)
 
-        --------------------------------------------------------------
-        -- MAIN CONTENT CONTAINER
-        --------------------------------------------------------------
         local Container = new("Frame", {
             Size                  = UDim2.new(1, -150, 1, -40),
             Position              = UDim2.new(0, 150, 0, 40),
@@ -1641,14 +1579,11 @@ function Aquafield:CreateWindow(opts)
         Window._SideList  = SideList
         Window._Container = Container
 
-        --------------------------------------------------------------
-        -- SEARCH FILTER LOGIC
         --   Walks every direct child of the active tab's page.
         --   For each child frame, finds its first TextLabel/TextButton
         --   descendant and matches the query (case-insensitive,
         --   substring).  Non-matching frames fade out + collapse.
         --   Section headers always stay visible.
-        --------------------------------------------------------------
         -- Collect ALL text from a component (label, sub-label, button,
         -- dropdown options) so a single query character lights up every
         -- matching element across the active tab.
@@ -1698,9 +1633,7 @@ function Aquafield:CreateWindow(opts)
         SearchBox.FocusLost:Connect(function() runSearch(SearchBox.Text) end)
         Window._RunSearch = runSearch
 
-        --------------------------------------------------------------
         -- TOP BUTTONS  +  fancy close/minimize transitions
-        --------------------------------------------------------------
         local minimized = false
         function Window:Toggle()
             minimized = not minimized
@@ -1758,9 +1691,6 @@ function Aquafield:CreateWindow(opts)
         task.wait(0.05); timeout = timeout + 0.05
     end
 
---------------------------------------------------------------------------------
--- TABS  +  COMPONENT CONSTRUCTORS
---------------------------------------------------------------------------------
     -- activeTab is declared above (shared upvalue used by runSearch)
     function Window:CreateTab(name, icon)
         local Tab = { Name = name }
@@ -1871,7 +1801,6 @@ function Aquafield:CreateWindow(opts)
             return f
         end
 
-
         function Tab:CreateSection(title)
             local th = Aquafield.Theme
             local s  = new("Frame", {
@@ -1898,7 +1827,6 @@ function Aquafield:CreateWindow(opts)
             return { Set = function(_, t) l.Text = string.upper(t) end }
         end
     
-
         function Tab:CreateLabel(text)
             local f = baseElement(30)
             local l = new("TextLabel", {
@@ -1913,7 +1841,6 @@ function Aquafield:CreateWindow(opts)
             return { Set = function(_, t) l.Text = t end }
         end
     
-
         function Tab:CreateParagraph(o)
             local f = baseElement(56)
             f.AutomaticSize = Enum.AutomaticSize.Y
@@ -1947,7 +1874,6 @@ function Aquafield:CreateWindow(opts)
             }
         end
     
-
         function Tab:CreateButton(o)
             local th = Aquafield.Theme
             local f  = baseElement(38)
@@ -1997,7 +1923,6 @@ function Aquafield:CreateWindow(opts)
             return { Set = function(_, t) lbl.Text = t end }
         end
     
-
         function Tab:CreateToggle(o)
             local th = Aquafield.Theme
             local val = o.CurrentValue and true or false
@@ -2046,7 +1971,6 @@ function Aquafield:CreateWindow(opts)
             return api
         end
     
-
         function Tab:CreateSlider(o)
             local th = Aquafield.Theme
             local rng = o.Range or { 0, 100 }
@@ -2127,7 +2051,6 @@ function Aquafield:CreateWindow(opts)
             return api
         end
     
-
         function Tab:CreateDropdown(o)
             local th      = Aquafield.Theme
             local options = o.Options or {}
@@ -2261,7 +2184,6 @@ function Aquafield:CreateWindow(opts)
             return api
         end
     
-
         function Tab:CreateInput(o)
             local th = Aquafield.Theme
             local f  = baseElement(38)
@@ -2299,7 +2221,6 @@ function Aquafield:CreateWindow(opts)
             return api
         end
     
-
         function Tab:CreateKeybind(o)
             local th = Aquafield.Theme
             local key = o.CurrentKeybind or "None"
@@ -2349,7 +2270,6 @@ function Aquafield:CreateWindow(opts)
             return api
         end
     
-
         function Tab:CreateColorPicker(o)
             local th = Aquafield.Theme
             local color = o.Color or Color3.fromRGB(255, 255, 255)
@@ -2464,9 +2384,7 @@ function Aquafield:CreateWindow(opts)
         return Tab
     end -- CreateTab
 
---------------------------------------------------------------------------------
 -- BUILT-IN SETTINGS TAB  (auto-injected, includes keybind picker)
---------------------------------------------------------------------------------
     -- Inject a Settings tab so the keybind, theme, etc. are always tweakable
     do
         local Settings = Window:CreateTab("Settings", 6031280882)
@@ -2487,7 +2405,7 @@ function Aquafield:CreateWindow(opts)
             Name = "Notifications",
             Options = { "BottomRight", "BottomLeft", "TopRight", "TopLeft" },
             CurrentOption = Aquafield.NotifSide,
-            Callback = function(v) positionNotifHolder(v) end,
+            Callback = function(v) positionNotifHolder(v); saveAquafieldPrefs() end,
         })
 
         Settings:CreateSection("Controls")
@@ -2504,6 +2422,7 @@ function Aquafield:CreateWindow(opts)
             function kb:Set(k)
                 origSet(self, k)
                 Aquafield.ToggleUIKeybind = keyCodeFromName(k)
+                saveAquafieldPrefs()
             end
         end
         -- Re-route the listening assignment by polling CurrentKeybind
@@ -2514,6 +2433,7 @@ function Aquafield:CreateWindow(opts)
                 if kb.CurrentKeybind ~= last then
                     last = kb.CurrentKeybind
                     Aquafield.ToggleUIKeybind = keyCodeFromName(last)
+                    saveAquafieldPrefs()
                 end
             end
         end)
@@ -2546,13 +2466,12 @@ function Aquafield:CreateWindow(opts)
         end)
     end
 
+    pcall(loadAquafieldPrefs)
     table.insert(Aquafield._windows, Window)
     return Window
 end -- CreateWindow
 
---------------------------------------------------------------------------------
 -- EXTRA: ICON CATALOG  (Rayfield-compatible asset ids by name)
---------------------------------------------------------------------------------
 Aquafield.Icons = {
     home         = 4483362458,
     settings     = 6031280882,
@@ -2613,9 +2532,7 @@ function Aquafield:GetIcon(name)
     return nil
 end
 
---------------------------------------------------------------------------------
 -- EXTRA: EASING PRESETS  (named TweenInfo factories)
---------------------------------------------------------------------------------
 Aquafield.Easing = {}
 Aquafield.Easing.Smooth = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 Aquafield.Easing.Snappy = TweenInfo.new(0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
@@ -2635,9 +2552,6 @@ function Aquafield:Tween(o, name, props)
     local tw = TweenService:Create(o, info, props); tw:Play(); return tw
 end
 
---------------------------------------------------------------------------------
--- EXTRA: COLOR UTILITIES
---------------------------------------------------------------------------------
 Aquafield.Color = {}
 function Aquafield.Color.fromHex(hex)
     hex = hex:gsub("#", "")
@@ -2665,9 +2579,7 @@ function Aquafield.Color.greyscale(c)
     local g = (c.R + c.G + c.B) / 3; return Color3.new(g, g, g)
 end
 
---------------------------------------------------------------------------------
 -- EXTRA: SIGNAL  (tiny event helper)
---------------------------------------------------------------------------------
 local Signal = {}
 Signal.__index = Signal
 function Signal.new()
@@ -2699,9 +2611,7 @@ do
     end
 end
 
---------------------------------------------------------------------------------
 -- EXTRA: PRESET BUILDERS  (one-line helpers)
---------------------------------------------------------------------------------
 function Aquafield:QuickInfo(title, content)
     return self:Notify({ Title = title, Content = content, Duration = 3 })
 end
@@ -2724,9 +2634,7 @@ function Aquafield:QuickSuccess(title, content)
     })
 end
 
---------------------------------------------------------------------------------
 -- EXTRA: MOTION HELPERS  (shake, pulse, fadeIn, fadeOut)
---------------------------------------------------------------------------------
 function Aquafield:Shake(inst, intensity, duration)
     intensity = intensity or 4; duration = duration or 0.3
     local start = inst.Position
@@ -2769,9 +2677,7 @@ function Aquafield:FadeOut(inst, duration)
     end
 end
 
---------------------------------------------------------------------------------
 -- EXTRA: KEYBIND HELPERS  (global key map)
---------------------------------------------------------------------------------
 Aquafield._globalBinds = {}
 function Aquafield:Bind(keyName, callback)
     self._globalBinds[keyName] = callback
@@ -2786,9 +2692,6 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     if cb then pcall(cb) end
 end)
 
---------------------------------------------------------------------------------
--- EXTRA: SCREEN UTILITIES
---------------------------------------------------------------------------------
 function Aquafield:CenterOnScreen(frame)
     local sz = frame.AbsoluteSize
     frame.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -2800,9 +2703,6 @@ function Aquafield:GetViewport()
     return Vector2.new(1920, 1080)
 end
 
---------------------------------------------------------------------------------
--- EXTRA: DESTROY / CLEANUP
---------------------------------------------------------------------------------
 function Aquafield:Destroy()
     if ScreenGui and ScreenGui.Parent then ScreenGui:Destroy() end
     table.clear(self._windows)
@@ -2810,1967 +2710,12 @@ function Aquafield:Destroy()
     table.clear(self.Flags)
 end
 
---------------------------------------------------------------------------------
--- DOCUMENTATION REFERENCE  (in-source, scroll-friendly)
---------------------------------------------------------------------------------
--- ============================================================
--- AQUAFIELD  v2.0   --   FULL API REFERENCE
--- ============================================================
---
--- LIBRARY:
---   Aquafield:CreateWindow(opts)         -> Window
---   Aquafield:SetTheme(name)
---   Aquafield:LoadConfiguration()
---   Aquafield:Notify({ Title, Content, Duration, Image })
---   Aquafield:Toggle()                   -- show/hide whole UI
---   Aquafield:Show()  / :Hide()
---   Aquafield:SetToggleKeybind(name)     -- e.g. "K", "RightShift"
---   Aquafield:Destroy()
---
--- WINDOW:
---   Window:CreateTab(name, iconId)       -> Tab
---   Window:Toggle()                      -- minimise / restore
---
--- TAB:
---   Tab:CreateSection(title)
---   Tab:CreateLabel(text)
---   Tab:CreateParagraph({ Title, Content })
---   Tab:CreateButton({ Name, Callback })
---   Tab:CreateToggle({ Name, CurrentValue, Flag, Callback })
---   Tab:CreateSlider({ Name, Range={min,max}, Increment, Suffix,
---                      CurrentValue, Flag, Callback })
---   Tab:CreateDropdown({ Name, Options, CurrentOption,
---                        MultipleOptions, Flag, Callback })
---   Tab:CreateInput({ Name, PlaceholderText,
---                     RemoveTextAfterFocusLost, Flag, Callback })
---   Tab:CreateKeybind({ Name, CurrentKeybind, Flag, Callback })
---   Tab:CreateColorPicker({ Name, Color, Flag, Callback })
---
--- THEMES:
---   "Ocean"        - calm cyan/navy
---   "Crimson"      - red on near-black
---   "MatrixGreen"  - cyberpunk green
---   "Amethyst"     - purples
---   "Sunset"       - warm orange/red
---   "Midnight"     - cool deep blues
---   "Forest"       - earth greens
---   "Cyber"        - vivid cyan + magenta
---   "Aurora"       - mint + lilac
---   "Mono"         - black & white
---
--- TOGGLE KEYBIND:
---   The whole UI hides/shows on a single keypress.
---   Default is K.  Change it from the Settings tab
---   (auto-injected into every window) or programmatically:
---
---       Aquafield:SetToggleKeybind("RightShift")
---
---   Or pass it when creating the window:
---
---       Aquafield:CreateWindow({ ToggleUIKeybind = "F" })
---
--- CONFIG SAVING:
---   When ConfigurationSaving.Enabled = true, the library
---   persists:
---     * all Flag values
---     * current theme
---     * current toggle keybind
---     * acrylic strength
---     * notification position
---
--- COLOR UTILS:
---   Aquafield.Color.fromHex("#3498db")
---   Aquafield.Color.toHex(Color3)
---   Aquafield.Color.lerp(a, b, t)
---   Aquafield.Color.darken(c, 0.2)
---   Aquafield.Color.lighten(c, 0.2)
---   Aquafield.Color.complement(c)
---   Aquafield.Color.greyscale(c)
---
--- MOTION HELPERS:
---   Aquafield:Shake(inst, intensity, duration)
---   Aquafield:Pulse(inst, scale, duration)
---   Aquafield:FadeIn(inst, duration)
---   Aquafield:FadeOut(inst, duration)
---
--- EASING PRESETS:
---   Aquafield:Tween(inst, "Smooth"  , { ... })
---   Aquafield:Tween(inst, "Snappy"  , { ... })
---   Aquafield:Tween(inst, "Glide"   , { ... })
---   Aquafield:Tween(inst, "Bounce"  , { ... })
---   Aquafield:Tween(inst, "Slam"    , { ... })
---   Aquafield:Tween(inst, "Crawl"   , { ... })
---   Aquafield:Tween(inst, "Pop"     , { ... })
---   Aquafield:Tween(inst, "FadeIn"  , { ... })
---   Aquafield:Tween(inst, "FadeOut" , { ... })
---   Aquafield:Tween(inst, "LongGlide",{ ... })
---   Aquafield:Tween(inst, "ShortPunch",{ ... })
---   Aquafield:Tween(inst, "RubberBand",{ ... })
---
--- SIGNALS:
---   Aquafield.OnToggle:Connect(function(visible) ... end)
---   Aquafield.OnThemeChange:Connect(function(name) ... end)
---
--- ICON CATALOG:
---   Aquafield:GetIcon("home")            -> "rbxassetid://..."
---   See Aquafield.Icons for the full list.
---
--- QUICK NOTIFIES:
---   Aquafield:QuickInfo(title, content)
---   Aquafield:QuickWarn(title, content)
---   Aquafield:QuickError(title, content)
---   Aquafield:QuickSuccess(title, content)
---
--- ============================================================
--- EXAMPLE
--- ============================================================
---
---   local Aquafield = loadstring(game:HttpGet("YOUR_URL"))()
---
---   local Window = Aquafield:CreateWindow({
---       Name             = "Demo Hub",
---       LoadingTitle     = "Demo",
---       LoadingSubtitle  = "v1.0",
---       Theme            = "Cyber",
---       ToggleUIKeybind  = "K",
---       ConfigurationSaving = {
---           Enabled  = true,
---           FolderName = "Aquafield",
---           FileName = "Demo",
---       },
---   })
---
---   local Main = Window:CreateTab("Main",   Aquafield.Icons.home)
---   local Vis  = Window:CreateTab("Visuals",Aquafield.Icons.eye)
---   local Info = Window:CreateTab("Info",   Aquafield.Icons.info)
---
---   Main:CreateSection("Combat")
---   Main:CreateToggle({
---       Name = "Auto Attack",
---       CurrentValue = false,
---       Flag = "AutoAttack",
---       Callback = function(v) print("AutoAttack:", v) end,
---   })
---   Main:CreateSlider({
---       Name = "Attack Range",
---       Range = { 1, 50 }, Increment = 1, Suffix = " studs",
---       CurrentValue = 12,
---       Flag = "AttackRange",
---       Callback = function(v) print("range", v) end,
---   })
---   Main:CreateDropdown({
---       Name = "Target Priority",
---       Options = { "Closest", "Lowest HP", "Highest HP" },
---       CurrentOption = "Closest",
---       Flag = "TargetPri",
---       Callback = function(v) print(v) end,
---   })
---
---   Vis:CreateSection("ESP")
---   Vis:CreateToggle({ Name = "Boxes",   CurrentValue = true,
---                      Flag = "ESPBox",   Callback = function() end })
---   Vis:CreateToggle({ Name = "Names",   CurrentValue = true,
---                      Flag = "ESPName",  Callback = function() end })
---   Vis:CreateColorPicker({
---       Name = "ESP Color",
---       Color = Color3.fromRGB(0, 255, 200),
---       Flag = "ESPColor",
---       Callback = function() end,
---   })
---   Vis:CreateButton({
---       Name = "Reload visuals",
---       Callback = function()
---           Aquafield:QuickSuccess("Reloaded", "Visuals reloaded.")
---       end,
---   })
---
---   Info:CreateParagraph({
---       Title   = "About",
---       Content = "Press K to hide/show this UI. "
---              .. "Change the keybind in the Settings tab.",
---   })
---   Info:CreateLabel("Build: 2.0.0")
---
---   Aquafield:LoadConfiguration()
---
--- ============================================================
--- That's it. Enjoy.
--- ============================================================
-
---------------------------------------------------------------------------------
--- CHANGELOG  (verbose, kept inline for portability)
---------------------------------------------------------------------------------
--- v2.0.0
---   *  Complete visual overhaul:
---      - Glassmorphism halo on every window
---      - Animated entrance (spring back-out)
---      - Indicator pill on the active sidebar tab
---      - Gradient-filled progress / slider fills
---      - Ripple effect on button click
---      - Hover-shift arrow on buttons
---      - Hover lift on theme swatches
---      - Decorative ambient particle field
---   *  Added Toggle-UI keybind system (default K)
---      - Library-wide keybind, not per-window
---      - User-editable from the auto-injected Settings tab
---      - Persisted in saved config
---   *  Added 7 new themes (Amethyst, Sunset, Midnight,
---      Forest, Cyber, Aurora, Mono)
---   *  Added Settings tab (auto-injected per window):
---      - Theme switcher
---      - Accent glow slider
---      - Notification position picker
---      - Toggle UI keybind picker
---      - Hide UI button
---      - About paragraph
---   *  Added Aquafield.Icons catalog (Rayfield-compatible)
---   *  Added Aquafield.Easing presets and Aquafield:Tween
---   *  Added Aquafield.Color utilities (hex, lerp, complement,
---      greyscale, lighten, darken)
---   *  Added Aquafield.Signal + OnToggle / OnThemeChange
---   *  Added motion helpers: Shake, Pulse, FadeIn, FadeOut
---   *  Added QuickInfo / QuickWarn / QuickError / QuickSuccess
---   *  Added per-config metadata (theme + keybind persistence)
---   *  Improved key system layout
---   *  Improved notification card with subtle gradient overlay
---   *  Improved dropdown with hover background
---
--- v1.x
---   *  Initial Rayfield-compatible API:
---      CreateWindow, CreateTab, CreateSection, CreateLabel,
---      CreateParagraph, CreateButton, CreateToggle, CreateSlider,
---      CreateDropdown, CreateInput, CreateKeybind, CreateColorPicker
---   *  Themes: Ocean, Crimson, MatrixGreen
---   *  Config saving via writefile / readfile when supported
---   *  Drag-anywhere windows
---   *  Loading splash screen
---   *  Key system gate
-
---------------------------------------------------------------------------------
--- APPENDIX A  --  THEME PHILOSOPHY
---------------------------------------------------------------------------------
--- Each theme is hand-tuned around four values: Background, Sidebar,
--- Accent, and Text. The remaining channels (Element, ElementHover,
--- Border, etc.) are picked to keep contrast consistent across themes.
---
--- Ocean
---   Inspired by the calm of deep water at night. The accent is a
---   cool sky-blue that pops against the navy sidebar without being
---   harsh on dark screens. Best paired with marine icons.
---
--- Crimson
---   A bold, dramatic palette: near-black surfaces with an intense
---   red accent. Good for "danger" themed hubs or anything that
---   needs to feel high-stakes.
---
--- MatrixGreen
---   Classic cyberpunk-terminal vibe. The accent is a saturated
---   green that reads like CRT text. Best with monospace icons.
---
--- Amethyst
---   Royal purple on midnight. Feels expensive, slightly mystical.
---   Pairs well with magic/RPG hubs.
---
--- Sunset
---   Warm orange + red, like a golden hour overlay. Friendly and
---   inviting; great for casual / minigame UIs.
---
--- Midnight
---   Cool blue-grey, very low saturation. Reads as calm and
---   professional. Good for analytics dashboards.
---
--- Forest
---   Mossy greens and earth tones. Organic and grounded.
---
--- Cyber
---   Electric cyan accent on near-black, with a magenta error
---   highlight. Maximum neon, minimum apology.
---
--- Aurora
---   Mint + lilac on deep teal. Inspired by the northern lights.
---   Soft but distinctive.
---
--- Mono
---   Black and white. The accent is pure white. Use this when
---   you want the content to do the talking, not the chrome.
-
---------------------------------------------------------------------------------
--- APPENDIX B  --  KEYBIND DESIGN NOTES
---------------------------------------------------------------------------------
--- Why a single library-wide toggle keybind (not one per window)?
---
---   1. Discoverability.  Users only need to remember ONE key to
---      get their UI back. With multiple windows it would be unclear
---      which one a keypress targeted.
---   2. Predictability.  External scripts can reliably call
---      Aquafield:Toggle() without knowing the structure.
---   3. Consistency with Rayfield.  Rayfield uses a single global
---      toggle keybind; we keep that contract.
---
--- Why default to "K"?
---
---   * It is unbound in default Roblox controls.
---   * It is easy to press with the left hand while moving with WASD.
---   * It matches the request in the project brief.
---
--- How is the keybind persisted?
---
---   When ConfigurationSaving is enabled, the keybind name is stored
---   under the _meta.keybind field of the JSON config.  On the next
---   :LoadConfiguration() call the keybind is restored before any
---   tab UI is rebuilt, so the user's preference takes effect
---   immediately.
---
--- How does the Settings tab keybind picker stay in sync?
---
---   The picker is a normal CreateKeybind() control. We poll its
---   CurrentKeybind in a background coroutine and update the
---   library's ToggleUIKeybind whenever it changes. This avoids
---   monkey-patching UserInputService.InputBegan.
-
---------------------------------------------------------------------------------
--- APPENDIX C  --  PERFORMANCE NOTES
---------------------------------------------------------------------------------
--- The particle field is intentionally cheap: max 40 simultaneous
--- particles, each a 2-5px Frame with a Tween that runs once and
--- destroys itself. CPU cost is dominated by the Tween scheduler.
---
--- Theme switching does not rebuild any UI. It iterates the
--- _themed registry and re-assigns BackgroundColor3 / TextColor3 /
--- ImageColor3 / UIStroke.Color in place. The registry stores a
--- weak reference shape (table per instance) so deleted instances
--- become a no-op rather than throwing.
---
--- Config saving is debounced to once every 10 seconds by the
--- autosave loop. It is also called on window close. The data is
--- JSON-encoded with HttpService, which is faster than table.concat
--- for nested structures.
---
--- All Tweens use Quad-Out by default; the "spring" helper uses
--- Back-Out for entrance bounce. We deliberately avoid Elastic for
--- frequent interactions because it can feel sluggish.
-
---------------------------------------------------------------------------------
--- APPENDIX D  --  MIGRATING FROM RAYFIELD
---------------------------------------------------------------------------------
--- Aquafield's public API is a strict superset of Rayfield's.
--- A Rayfield script generally just works by changing the
--- loadstring URL. Behavioural differences worth noting:
---
---   * Aquafield auto-injects a "Settings" tab. If you do not
---     want it, comment out the `do ... end` block at the bottom
---     of CreateWindow.
---   * The default toggle keybind is K. Rayfield uses K too,
---     so no change is needed.
---   * Themes are named differently and Aquafield ships with
---     ten of them. Pass Theme = "Default" to fall back to Ocean.
---   * Notifications include a subtle gradient overlay; pass
---     Image = your_id to keep parity with Rayfield calls.
---   * Window:Toggle() minimises the window (chrome-only).
---     Aquafield:Toggle() hides the entire UI (the keybind path).
---------------------------------------------------------------------------------
--- APPENDIX E  --  RECIPE COOKBOOK
---------------------------------------------------------------------------------
--- Recipe 1:  A simple "auto farm" tab
--- ----------------------------------------
---   local Farm = Window:CreateTab("Auto Farm", Aquafield.Icons.play)
---   Farm:CreateSection("Targets")
---   Farm:CreateDropdown({
---       Name = "Mob",
---       Options = { "Goblin", "Wolf", "Bear" },
---       CurrentOption = "Goblin",
---       Flag = "FarmMob",
---       Callback = function(v) farmConfig.mob = v end,
---   })
---   Farm:CreateSlider({
---       Name = "Distance",
---       Range = { 5, 200 }, Increment = 5, Suffix = " studs",
---       CurrentValue = 50,
---       Flag = "FarmDist",
---       Callback = function(v) farmConfig.dist = v end,
---   })
---   Farm:CreateToggle({
---       Name = "Enabled",
---       CurrentValue = false,
---       Flag = "FarmEnabled",
---       Callback = function(v) farmConfig.on = v end,
---   })
---
--- Recipe 2:  An ESP tab with live color preview
--- --------------------------------------------
---   local ESP = Window:CreateTab("ESP", Aquafield.Icons.eye)
---   ESP:CreateColorPicker({
---       Name = "Box color",
---       Color = Color3.fromRGB(0, 255, 200),
---       Flag = "ESPColor",
---       Callback = function(c) updateESP(c) end,
---   })
---   ESP:CreateToggle({
---       Name = "Through walls",
---       CurrentValue = false, Flag = "ESPWalls",
---       Callback = function(v) setOcclusion(v) end,
---   })
---
--- Recipe 3:  A teleport list rebuilt from server state
--- ---------------------------------------------------
---   local TP = Window:CreateTab("Teleport", Aquafield.Icons.map)
---   local dd = TP:CreateDropdown({
---       Name = "Location",
---       Options = {},
---       CurrentOption = nil,
---       Callback = function(v) goTo(v) end,
---   })
---   -- later:
---   dd:Refresh(getCurrentLocationNames())
---
--- Recipe 4:  Bind a hotkey to a specific feature
--- ----------------------------------------------
---   Main:CreateKeybind({
---       Name = "Fire",
---       CurrentKeybind = "E",
---       Callback = function() fireWeapon() end,
---   })
---
--- Recipe 5:  React to theme changes from outside the library
--- ----------------------------------------------------------
---   Aquafield.OnThemeChange:Connect(function(name)
---       print("Theme is now", name)
---       Aquafield:QuickInfo("Theme", "Switched to " .. name)
---   end)
---
--- Recipe 6:  React to UI visibility
--- ---------------------------------
---   Aquafield.OnToggle:Connect(function(visible)
---       if visible then
---           print("UI shown")
---       else
---           print("UI hidden")
---       end
---   end)
---
--- Recipe 7:  Change toggle keybind in code
--- ----------------------------------------
---   Aquafield:SetToggleKeybind("RightShift")
---
--- Recipe 8:  Use the icon catalog
--- -------------------------------
---   Window:CreateTab("Profile", Aquafield.Icons.user)
---
--- Recipe 9:  Use the easing presets in your own tweens
--- ----------------------------------------------------
---   Aquafield:Tween(myFrame, "Bounce", { Size = UDim2.new(0, 100, 0, 100) })
---
--- Recipe 10:  Make any frame shake on damage
--- ------------------------------------------
---   onDamageTaken(function()
---       Aquafield:Shake(Window._Main, 6, 0.2)
---   end)
-
---------------------------------------------------------------------------------
--- APPENDIX F  --  FREQUENTLY ASKED QUESTIONS
---------------------------------------------------------------------------------
--- Q. How do I change the toggle keybind?
--- A. Three ways:
---      1. Pass ToggleUIKeybind = "K" when creating the window.
---      2. Call Aquafield:SetToggleKeybind("F") at any time.
---      3. Open the auto-injected Settings tab and click the
---         "Toggle UI" keybind picker, then press your new key.
---    The default is K.
---
--- Q. The UI vanished and the keybind no longer brings it back?
--- A. Either:
---      - The ScreenGui was destroyed by another script
---        (call Aquafield:Destroy() then re-create your window), or
---      - Another script captured the InputBegan event with
---        gameProcessed = true. Try a different key in Settings.
---
--- Q. Can I run two Aquafield windows at once?
--- A. Yes. Call CreateWindow twice. Both windows share the
---    single ScreenGui and the single toggle keybind, so pressing
---    K will hide / show both at the same time.
---
--- Q. The keybind picker doesn't update the toggle key?
--- A. It does, but with a 0.2s polling delay. If you need
---    instant updates, call Aquafield:SetToggleKeybind() yourself.
---
--- Q. Can I disable the auto-injected Settings tab?
--- A. Yes - comment out the `do ... Settings ... end` block
---    near the bottom of CreateWindow.
---
--- Q. Are notifications themed?
--- A. Yes. They use the current theme's Sidebar / Accent / Text
---    / SubText tokens, so they shift colors when SetTheme runs.
---
--- Q. Does it support touch screens?
--- A. Yes. Drag, sliders, color picker, and dropdowns all
---    listen for Enum.UserInputType.Touch alongside MouseButton1.
---
--- Q. Why is my config not saving?
--- A. The host executor must expose writefile / readfile / isfile.
---    Vanilla Roblox does not; this only works in script
---    executors that whitelist those globals.
---
--- Q. How do I add my own theme?
--- A. Add an entry to the Themes table at the top of this file.
---    All keys (Background, Sidebar, Topbar, Element,
---    ElementHover, Accent, AccentSoft, Text, SubText, Border,
---    Success, Error) are required.
-
---------------------------------------------------------------------------------
--- APPENDIX G  --  THEME COLOR TABLE  (for reference)
---------------------------------------------------------------------------------
---
--- key            Ocean        Crimson      MatrixGreen   Amethyst
--- -------------- ------------ ------------ ------------- -------------
--- Background     10 18 30     18  8 10      4 12  6      16 10 28
--- Sidebar        14 24 40     24 10 14      6 18 10      22 14 38
--- Topbar         12 22 36     20  9 12      5 15  8      18 12 32
--- Element        20 34 54     38 14 20     10 28 14      32 22 54
--- ElementHover   28 46 72     58 20 28     16 44 22      46 32 76
--- Accent         64 180 255  235 60 80     80 255 130   170 120 255
--- AccentSoft     28 110 180  150 30 45     30 160 70    110  70 200
--- Text          225 240 255  255 235 235  210 255 220  235 225 255
--- SubText       140 170 200  190 150 155  120 180 140  170 150 210
--- Border         34  60  90   80  25  35   28  80  40   70  50 110
--- Success        80 220 200  120 220 140  120 255 160  130 255 210
--- Error         255  90 110  255  80  80  255 100 100  255  90 160
---
--- key            Sunset       Midnight     Forest        Cyber
--- -------------- ------------ ------------ ------------- -------------
--- Background     28 14 18      6  8 16      8 18 12       4  6 14
--- Sidebar        40 20 22     10 12 22     12 26 18       8 10 22
--- Topbar         34 16 20      8 10 18     10 22 15       6  8 18
--- Element        54 26 28     16 20 32     18 38 24      14 18 34
--- ElementHover   74 38 38     22 28 44     28 54 36      22 28 52
--- Accent        255 140  80  120 140 255  110 210 140    0 240 255
--- AccentSoft    220  90  60   60  80 200   50 140  80    0 140 200
--- Text          255 235 220  220 228 255  220 240 225  200 250 255
--- SubText       210 170 150  140 150 200  150 190 160  110 170 200
--- Border        110  55  50   40  50  80   40  80  55   20  80 120
--- Success       255 210 120  100 220 200  200 240 140  255  80 200
--- Error         255 100  90  255 120 140  255 120 120  255  80 140
---
--- key            Aurora       Mono
--- -------------- ------------ -----------
--- Background      8 12 22     12 12 12
--- Sidebar        14 20 34     18 18 18
--- Topbar         12 16 28     14 14 14
--- Element        22 32 50     28 28 28
--- ElementHover   32 44 70     40 40 40
--- Accent        130 230 200  240 240 240
--- AccentSoft     60 160 180  160 160 160
--- Text          225 240 240  245 245 245
--- SubText       150 190 200  160 160 160
--- Border         50  80 100   60  60  60
--- Success       200 160 255  180 255 180
--- Error         255 140 180  255 140 140
---
-
---------------------------------------------------------------------------------
--- APPENDIX H  --  ICON CATALOG REFERENCE
---------------------------------------------------------------------------------
--- The Aquafield.Icons table maps short names to rbxassetids:
---   Aquafield.Icons.home
---   Aquafield.Icons.settings
---   Aquafield.Icons.user
---   Aquafield.Icons.search
---   Aquafield.Icons.close
---   Aquafield.Icons.check
---   Aquafield.Icons.warning
---   Aquafield.Icons.info
---   Aquafield.Icons.error
---   Aquafield.Icons.star
---   Aquafield.Icons.heart
---   Aquafield.Icons.trash
---   Aquafield.Icons.download
---   Aquafield.Icons.upload
---   Aquafield.Icons.link
---   Aquafield.Icons.lock
---   Aquafield.Icons.unlock
---   Aquafield.Icons.eye
---   Aquafield.Icons.eye_off
---   Aquafield.Icons.play
---   Aquafield.Icons.pause
---   Aquafield.Icons.stop
---   Aquafield.Icons.next
---   Aquafield.Icons.prev
---   Aquafield.Icons.plus
---   Aquafield.Icons.minus
---   Aquafield.Icons.edit
---   Aquafield.Icons.save
---   Aquafield.Icons.refresh
---   Aquafield.Icons.share
---   Aquafield.Icons.globe
---   Aquafield.Icons.cog
---   Aquafield.Icons.bell
---   Aquafield.Icons.calendar
---   Aquafield.Icons.clock
---   Aquafield.Icons.mail
---   Aquafield.Icons.chat
---   Aquafield.Icons.phone
---   Aquafield.Icons.map
---   Aquafield.Icons.camera
---   Aquafield.Icons.image
---   Aquafield.Icons.video
---   Aquafield.Icons.music
---   Aquafield.Icons.mic
---   Aquafield.Icons.volume
---   Aquafield.Icons.battery
---   Aquafield.Icons.wifi
---   Aquafield.Icons.bluetooth
---   Aquafield.Icons.compass
---   Aquafield.Icons.flag
---   Aquafield.Icons.bookmark
---
--- Pass any of these to CreateTab(name, iconId) by writing
---   Window:CreateTab("Profile", Aquafield.Icons.user)
-
---------------------------------------------------------------------------------
--- APPENDIX I  --  END-OF-FILE
---------------------------------------------------------------------------------
--- This file is intentionally verbose: it ships as a single
--- loadstring-friendly Lua module, with no external deps. Edit
--- freely; the public API is the only contract you should treat
--- as stable across versions.
-
---------------------------------------------------------------------------------
--- APPENDIX J  --  EXTENDED EXAMPLE  (a fully featured hub)
---------------------------------------------------------------------------------
--- The following example exercises every public component and
--- the keybind / theme / config systems end to end.  Drop it
--- below the loadstring line to verify a fresh install.
---
---   local Aquafield = loadstring(game:HttpGet("YOUR_URL"))()
---
---   --====================================================--
---   -- Window
---   --====================================================--
---   local Window = Aquafield:CreateWindow({
---       Name             = "Aquafield Demo Hub",
---       Icon             = Aquafield.Icons.home,
---       LoadingTitle     = "Aquafield",
---       LoadingSubtitle  = "Demo build",
---       Theme            = "Cyber",
---       ToggleUIKeybind  = "K",
---       DisableAquafieldPrompts = false,
---       ConfigurationSaving = {
---           Enabled    = true,
---           FolderName = "Aquafield",
---           FileName   = "Demo",
---       },
---       KeySystem = false,
---   })
---
---   --====================================================--
---   -- Main tab
---   --====================================================--
---   local Main = Window:CreateTab("Main", Aquafield.Icons.home)
---   Main:CreateSection("General")
---   Main:CreateLabel("Welcome to the demo hub.")
---   Main:CreateParagraph({
---       Title   = "Read me first",
---       Content = "Press K to hide / show this UI.  Change "
---              .. "the keybind in the Settings tab if K is taken.",
---   })
---   Main:CreateButton({
---       Name = "Say hi",
---       Callback = function()
---           Aquafield:QuickSuccess("Hi", "Hello from the demo.")
---       end,
---   })
---   Main:CreateButton({
---       Name = "Shake window",
---       Callback = function()
---           Aquafield:Shake(Window._Main, 8, 0.35)
---       end,
---   })
---   Main:CreateButton({
---       Name = "Pulse window",
---       Callback = function()
---           Aquafield:Pulse(Window._Main, 1.02, 0.3)
---       end,
---   })
---
---   --====================================================--
---   -- Inputs tab
---   --====================================================--
---   local Inputs = Window:CreateTab("Inputs", Aquafield.Icons.edit)
---   Inputs:CreateSection("Toggles")
---   Inputs:CreateToggle({
---       Name = "Boolean A",
---       CurrentValue = false, Flag = "boolA",
---       Callback = function(v) print("boolA", v) end,
---   })
---   Inputs:CreateToggle({
---       Name = "Boolean B",
---       CurrentValue = true,  Flag = "boolB",
---       Callback = function(v) print("boolB", v) end,
---   })
---
---   Inputs:CreateSection("Sliders")
---   Inputs:CreateSlider({
---       Name = "Speed", Range = { 0, 100 }, Increment = 1,
---       Suffix = "%", CurrentValue = 50, Flag = "speed",
---       Callback = function(v) print("speed", v) end,
---   })
---   Inputs:CreateSlider({
---       Name = "Volume", Range = { 0, 10 }, Increment = 0.1,
---       CurrentValue = 5, Flag = "volume",
---       Callback = function(v) print("volume", v) end,
---   })
---
---   Inputs:CreateSection("Dropdowns")
---   Inputs:CreateDropdown({
---       Name = "Single", Options = { "Red", "Green", "Blue" },
---       CurrentOption = "Red", Flag = "singleDD",
---       Callback = function(v) print("single", v) end,
---   })
---   Inputs:CreateDropdown({
---       Name = "Multi", Options = { "A", "B", "C", "D" },
---       MultipleOptions = true, CurrentOption = { "A", "C" },
---       Flag = "multiDD",
---       Callback = function(v) print("multi", table.concat(v, ",")) end,
---   })
---
---   Inputs:CreateSection("Text")
---   Inputs:CreateInput({
---       Name = "Player name",
---       PlaceholderText = "Type a name...",
---       Flag = "playerName",
---       Callback = function(v) print("name", v) end,
---   })
---   Inputs:CreateInput({
---       Name = "Search", PlaceholderText = "Search...",
---       RemoveTextAfterFocusLost = true, Flag = "search",
---       Callback = function(v) print("search", v) end,
---   })
---
---   Inputs:CreateSection("Keybinds")
---   Inputs:CreateKeybind({
---       Name = "Fire", CurrentKeybind = "F",
---       Flag = "fireKey",
---       Callback = function() print("fire!") end,
---   })
---   Inputs:CreateKeybind({
---       Name = "Reload", CurrentKeybind = "R",
---       Flag = "reloadKey",
---       Callback = function() print("reload!") end,
---   })
---
---   Inputs:CreateSection("Color")
---   Inputs:CreateColorPicker({
---       Name = "Accent", Color = Color3.fromRGB(0, 240, 255),
---       Flag = "accentColor",
---       Callback = function(c) print("accent", c) end,
---   })
---
---   --====================================================--
---   -- Themes tab
---   --====================================================--
---   local Themes = Window:CreateTab("Themes", Aquafield.Icons.image)
---   Themes:CreateSection("Switch theme from code")
---   for _, n in ipairs({ "Ocean","Crimson","MatrixGreen",
---                        "Amethyst","Sunset","Midnight",
---                        "Forest","Cyber","Aurora","Mono" }) do
---       Themes:CreateButton({
---           Name = "Set theme: " .. n,
---           Callback = function() Aquafield:SetTheme(n) end,
---       })
---   end
---
---   --====================================================--
---   -- Toasts tab
---   --====================================================--
---   local Toasts = Window:CreateTab("Toasts", Aquafield.Icons.bell)
---   Toasts:CreateButton({ Name = "Info toast",
---       Callback = function()
---           Aquafield:QuickInfo("Heads up", "This is an info toast.")
---       end })
---   Toasts:CreateButton({ Name = "Warn toast",
---       Callback = function()
---           Aquafield:QuickWarn("Careful", "This is a warning toast.")
---       end })
---   Toasts:CreateButton({ Name = "Error toast",
---       Callback = function()
---           Aquafield:QuickError("Uh oh", "This is an error toast.")
---       end })
---   Toasts:CreateButton({ Name = "Success toast",
---       Callback = function()
---           Aquafield:QuickSuccess("Done", "This is a success toast.")
---       end })
---
---   --====================================================--
---   -- Bind a quick custom hotkey from outside the UI
---   --====================================================--
---   Aquafield:Bind("N", function()
---       Aquafield:QuickInfo("N pressed", "Custom global bind.")
---   end)
---
---   --====================================================--
---   -- Restore saved values
---   --====================================================--
---   Aquafield:LoadConfiguration()
---
--- That single block exercises every component, every toast
--- variant, theme switching, the global keybind helper, and
--- config persistence.  If anything fails to render, check the
--- console -- Aquafield never silences errors in user callbacks
--- beyond a pcall, so any traceback there points at the line
--- in YOUR code, not the library.
-
---------------------------------------------------------------------------------
--- APPENDIX K  --  FILE LAYOUT (for maintainers)
---------------------------------------------------------------------------------
--- Sections in this file, in order:
---   1. Header / usage comment
---   2. Services
---   3. Themes table  (10 themes)
---   4. Library root  (Aquafield = { ... })
---   5. Core helpers  (new, tween, spring, corner, stroke,
---      pad, gradient, lerpColor, darken, lighten, keyCodeFromName)
---   6. Theme registry + applyThemeColors + SetTheme
---   7. Drag helper
---   8. Root ScreenGui setup
---   9. Particle field
---  10. Notification stack + positioning
---  11. Config save / load + LoadConfiguration
---  12. Loading splash screen
---  13. Key system
---  14. Toggle-UI visibility + global keybind listener
---  15. CreateWindow  (the heart)
---  16. CreateTab  + all component constructors
---      (Section, Label, Paragraph, Button, Toggle, Slider,
---       Dropdown, Input, Keybind, ColorPicker)
---  17. Auto-injected Settings tab
---  18. Icon catalog
---  19. Easing presets + Aquafield:Tween
---  20. Color utilities
---  21. Signal helper + OnToggle / OnThemeChange
---  22. Quick notify helpers
---  23. Motion helpers (Shake, Pulse, FadeIn, FadeOut)
---  24. Global keybind helpers (Bind, Unbind)
---  25. Screen utilities (CenterOnScreen, GetViewport)
---  26. Destroy
---  27. Documentation reference
---  28. Changelog
---  29. Appendices A-K (philosophy, keybinds, perf, migration,
---      cookbook, FAQ, color table, icon catalog, EOF marker,
---      extended example, file layout)
-
-
---------------------------------------------------------------------------------
--- APPENDIX L : ENHANCED EDITION v2.5 NOTES
---------------------------------------------------------------------------------
---
--- v2.5 ships an upgraded visual layer on top of the v2.0 API.  The
--- public surface (CreateWindow / CreateTab / CreateButton / CreateToggle
--- / CreateSlider / CreateDropdown / CreateInput / CreateColorPicker /
--- CreateKeybind / CreateSection / CreateLabel / CreateParagraph /
--- Notify / LoadConfiguration / SetTheme / Toggle / Show / Hide /
--- SetToggleKeybind) is byte-for-byte identical to v2.0, so existing
--- scripts continue to load without modification:
---
---   local Aquafield = loadstring(game:HttpGet('.../Aquafield'))()
---   local Window = Aquafield:CreateWindow({ Name = '...', Theme='Ocean' })
---
--- What is new under the hood:
---   * Theme catalogue trimmed to 3 hand-tuned palettes: Ocean,
---     MatrixGreen, Crimson.  The legacy theme names (Amethyst,
---     Sunset, Midnight, Forest, Cyber, Aurora, Mono) still resolve
---     to one of the 3 cores via alias so legacy configs do not
---     hard-error when loaded.
---   * Every theme now publishes a full gradient contract
---     (BgGradientA/B/C, AccentA/B/C, HaloHue, ShimmerHue, GlowHue,
---     ParticleHue) consumed by the FX engine.
---   * FX engine: a single RunService.Heartbeat connection drives
---     all motion in the library through a small layer registry.
---     Adding a new effect is a one-liner.
---   * Topbar buttons (close / minimize / hide) replaced the
---     garbled UTF-8 glyphs with lucide-roblox ImageButton assets,
---     plus a unicode fallback layer underneath for executors that
---     cannot stream image content.
---   * Multi-layer animated stack per window: themed rotating
---     gradient, breathing accent halo, shimmer sweep, drifting
---     accent orb, particle field.
---
--- (001) reserved doc line — see SKILL.md for in-depth notes.
--- (002) reserved doc line — see SKILL.md for in-depth notes.
--- (003) reserved doc line — see SKILL.md for in-depth notes.
--- (004) reserved doc line — see SKILL.md for in-depth notes.
--- (005) reserved doc line — see SKILL.md for in-depth notes.
--- (006) reserved doc line — see SKILL.md for in-depth notes.
--- (007) reserved doc line — see SKILL.md for in-depth notes.
--- (008) reserved doc line — see SKILL.md for in-depth notes.
--- (009) reserved doc line — see SKILL.md for in-depth notes.
--- (010) reserved doc line — see SKILL.md for in-depth notes.
--- (011) reserved doc line — see SKILL.md for in-depth notes.
--- (012) reserved doc line — see SKILL.md for in-depth notes.
--- (013) reserved doc line — see SKILL.md for in-depth notes.
--- (014) reserved doc line — see SKILL.md for in-depth notes.
--- (015) reserved doc line — see SKILL.md for in-depth notes.
--- (016) reserved doc line — see SKILL.md for in-depth notes.
--- (017) reserved doc line — see SKILL.md for in-depth notes.
--- (018) reserved doc line — see SKILL.md for in-depth notes.
--- (019) reserved doc line — see SKILL.md for in-depth notes.
--- (020) reserved doc line — see SKILL.md for in-depth notes.
--- (021) reserved doc line — see SKILL.md for in-depth notes.
--- (022) reserved doc line — see SKILL.md for in-depth notes.
--- (023) reserved doc line — see SKILL.md for in-depth notes.
--- (024) reserved doc line — see SKILL.md for in-depth notes.
--- (025) reserved doc line — see SKILL.md for in-depth notes.
--- (026) reserved doc line — see SKILL.md for in-depth notes.
--- (027) reserved doc line — see SKILL.md for in-depth notes.
--- (028) reserved doc line — see SKILL.md for in-depth notes.
--- (029) reserved doc line — see SKILL.md for in-depth notes.
--- (030) reserved doc line — see SKILL.md for in-depth notes.
--- (031) reserved doc line — see SKILL.md for in-depth notes.
--- (032) reserved doc line — see SKILL.md for in-depth notes.
--- (033) reserved doc line — see SKILL.md for in-depth notes.
--- (034) reserved doc line — see SKILL.md for in-depth notes.
--- (035) reserved doc line — see SKILL.md for in-depth notes.
--- (036) reserved doc line — see SKILL.md for in-depth notes.
--- (037) reserved doc line — see SKILL.md for in-depth notes.
--- (038) reserved doc line — see SKILL.md for in-depth notes.
--- (039) reserved doc line — see SKILL.md for in-depth notes.
--- (040) reserved doc line — see SKILL.md for in-depth notes.
--- (041) reserved doc line — see SKILL.md for in-depth notes.
--- (042) reserved doc line — see SKILL.md for in-depth notes.
--- (043) reserved doc line — see SKILL.md for in-depth notes.
--- (044) reserved doc line — see SKILL.md for in-depth notes.
--- (045) reserved doc line — see SKILL.md for in-depth notes.
--- (046) reserved doc line — see SKILL.md for in-depth notes.
--- (047) reserved doc line — see SKILL.md for in-depth notes.
--- (048) reserved doc line — see SKILL.md for in-depth notes.
--- (049) reserved doc line — see SKILL.md for in-depth notes.
--- (050) reserved doc line — see SKILL.md for in-depth notes.
--- (051) reserved doc line — see SKILL.md for in-depth notes.
--- (052) reserved doc line — see SKILL.md for in-depth notes.
--- (053) reserved doc line — see SKILL.md for in-depth notes.
--- (054) reserved doc line — see SKILL.md for in-depth notes.
--- (055) reserved doc line — see SKILL.md for in-depth notes.
--- (056) reserved doc line — see SKILL.md for in-depth notes.
--- (057) reserved doc line — see SKILL.md for in-depth notes.
--- (058) reserved doc line — see SKILL.md for in-depth notes.
--- (059) reserved doc line — see SKILL.md for in-depth notes.
--- (060) reserved doc line — see SKILL.md for in-depth notes.
--- (061) reserved doc line — see SKILL.md for in-depth notes.
--- (062) reserved doc line — see SKILL.md for in-depth notes.
--- (063) reserved doc line — see SKILL.md for in-depth notes.
--- (064) reserved doc line — see SKILL.md for in-depth notes.
--- (065) reserved doc line — see SKILL.md for in-depth notes.
--- (066) reserved doc line — see SKILL.md for in-depth notes.
--- (067) reserved doc line — see SKILL.md for in-depth notes.
--- (068) reserved doc line — see SKILL.md for in-depth notes.
--- (069) reserved doc line — see SKILL.md for in-depth notes.
--- (070) reserved doc line — see SKILL.md for in-depth notes.
--- (071) reserved doc line — see SKILL.md for in-depth notes.
--- (072) reserved doc line — see SKILL.md for in-depth notes.
--- (073) reserved doc line — see SKILL.md for in-depth notes.
--- (074) reserved doc line — see SKILL.md for in-depth notes.
--- (075) reserved doc line — see SKILL.md for in-depth notes.
--- (076) reserved doc line — see SKILL.md for in-depth notes.
--- (077) reserved doc line — see SKILL.md for in-depth notes.
--- (078) reserved doc line — see SKILL.md for in-depth notes.
--- (079) reserved doc line — see SKILL.md for in-depth notes.
--- (080) reserved doc line — see SKILL.md for in-depth notes.
--- (081) reserved doc line — see SKILL.md for in-depth notes.
--- (082) reserved doc line — see SKILL.md for in-depth notes.
--- (083) reserved doc line — see SKILL.md for in-depth notes.
--- (084) reserved doc line — see SKILL.md for in-depth notes.
--- (085) reserved doc line — see SKILL.md for in-depth notes.
--- (086) reserved doc line — see SKILL.md for in-depth notes.
--- (087) reserved doc line — see SKILL.md for in-depth notes.
--- (088) reserved doc line — see SKILL.md for in-depth notes.
--- (089) reserved doc line — see SKILL.md for in-depth notes.
--- (090) reserved doc line — see SKILL.md for in-depth notes.
--- (091) reserved doc line — see SKILL.md for in-depth notes.
--- (092) reserved doc line — see SKILL.md for in-depth notes.
--- (093) reserved doc line — see SKILL.md for in-depth notes.
--- (094) reserved doc line — see SKILL.md for in-depth notes.
--- (095) reserved doc line — see SKILL.md for in-depth notes.
--- (096) reserved doc line — see SKILL.md for in-depth notes.
--- (097) reserved doc line — see SKILL.md for in-depth notes.
--- (098) reserved doc line — see SKILL.md for in-depth notes.
--- (099) reserved doc line — see SKILL.md for in-depth notes.
--- (100) reserved doc line — see SKILL.md for in-depth notes.
--- (101) reserved doc line — see SKILL.md for in-depth notes.
--- (102) reserved doc line — see SKILL.md for in-depth notes.
--- (103) reserved doc line — see SKILL.md for in-depth notes.
--- (104) reserved doc line — see SKILL.md for in-depth notes.
--- (105) reserved doc line — see SKILL.md for in-depth notes.
--- (106) reserved doc line — see SKILL.md for in-depth notes.
--- (107) reserved doc line — see SKILL.md for in-depth notes.
--- (108) reserved doc line — see SKILL.md for in-depth notes.
--- (109) reserved doc line — see SKILL.md for in-depth notes.
--- (110) reserved doc line — see SKILL.md for in-depth notes.
--- (111) reserved doc line — see SKILL.md for in-depth notes.
--- (112) reserved doc line — see SKILL.md for in-depth notes.
--- (113) reserved doc line — see SKILL.md for in-depth notes.
--- (114) reserved doc line — see SKILL.md for in-depth notes.
--- (115) reserved doc line — see SKILL.md for in-depth notes.
--- (116) reserved doc line — see SKILL.md for in-depth notes.
--- (117) reserved doc line — see SKILL.md for in-depth notes.
--- (118) reserved doc line — see SKILL.md for in-depth notes.
--- (119) reserved doc line — see SKILL.md for in-depth notes.
--- (120) reserved doc line — see SKILL.md for in-depth notes.
--- (121) reserved doc line — see SKILL.md for in-depth notes.
--- (122) reserved doc line — see SKILL.md for in-depth notes.
--- (123) reserved doc line — see SKILL.md for in-depth notes.
--- (124) reserved doc line — see SKILL.md for in-depth notes.
--- (125) reserved doc line — see SKILL.md for in-depth notes.
--- (126) reserved doc line — see SKILL.md for in-depth notes.
--- (127) reserved doc line — see SKILL.md for in-depth notes.
--- (128) reserved doc line — see SKILL.md for in-depth notes.
--- (129) reserved doc line — see SKILL.md for in-depth notes.
--- (130) reserved doc line — see SKILL.md for in-depth notes.
--- (131) reserved doc line — see SKILL.md for in-depth notes.
--- (132) reserved doc line — see SKILL.md for in-depth notes.
--- (133) reserved doc line — see SKILL.md for in-depth notes.
--- (134) reserved doc line — see SKILL.md for in-depth notes.
--- (135) reserved doc line — see SKILL.md for in-depth notes.
--- (136) reserved doc line — see SKILL.md for in-depth notes.
--- (137) reserved doc line — see SKILL.md for in-depth notes.
--- (138) reserved doc line — see SKILL.md for in-depth notes.
--- (139) reserved doc line — see SKILL.md for in-depth notes.
--- (140) reserved doc line — see SKILL.md for in-depth notes.
--- (141) reserved doc line — see SKILL.md for in-depth notes.
--- (142) reserved doc line — see SKILL.md for in-depth notes.
--- (143) reserved doc line — see SKILL.md for in-depth notes.
--- (144) reserved doc line — see SKILL.md for in-depth notes.
--- (145) reserved doc line — see SKILL.md for in-depth notes.
--- (146) reserved doc line — see SKILL.md for in-depth notes.
--- (147) reserved doc line — see SKILL.md for in-depth notes.
--- (148) reserved doc line — see SKILL.md for in-depth notes.
--- (149) reserved doc line — see SKILL.md for in-depth notes.
--- (150) reserved doc line — see SKILL.md for in-depth notes.
--- (151) reserved doc line — see SKILL.md for in-depth notes.
--- (152) reserved doc line — see SKILL.md for in-depth notes.
--- (153) reserved doc line — see SKILL.md for in-depth notes.
--- (154) reserved doc line — see SKILL.md for in-depth notes.
--- (155) reserved doc line — see SKILL.md for in-depth notes.
--- (156) reserved doc line — see SKILL.md for in-depth notes.
--- (157) reserved doc line — see SKILL.md for in-depth notes.
--- (158) reserved doc line — see SKILL.md for in-depth notes.
--- (159) reserved doc line — see SKILL.md for in-depth notes.
--- (160) reserved doc line — see SKILL.md for in-depth notes.
--- (161) reserved doc line — see SKILL.md for in-depth notes.
--- (162) reserved doc line — see SKILL.md for in-depth notes.
--- (163) reserved doc line — see SKILL.md for in-depth notes.
--- (164) reserved doc line — see SKILL.md for in-depth notes.
--- (165) reserved doc line — see SKILL.md for in-depth notes.
--- (166) reserved doc line — see SKILL.md for in-depth notes.
--- (167) reserved doc line — see SKILL.md for in-depth notes.
--- (168) reserved doc line — see SKILL.md for in-depth notes.
--- (169) reserved doc line — see SKILL.md for in-depth notes.
--- (170) reserved doc line — see SKILL.md for in-depth notes.
--- (171) reserved doc line — see SKILL.md for in-depth notes.
--- (172) reserved doc line — see SKILL.md for in-depth notes.
--- (173) reserved doc line — see SKILL.md for in-depth notes.
--- (174) reserved doc line — see SKILL.md for in-depth notes.
--- (175) reserved doc line — see SKILL.md for in-depth notes.
--- (176) reserved doc line — see SKILL.md for in-depth notes.
--- (177) reserved doc line — see SKILL.md for in-depth notes.
--- (178) reserved doc line — see SKILL.md for in-depth notes.
--- (179) reserved doc line — see SKILL.md for in-depth notes.
--- (180) reserved doc line — see SKILL.md for in-depth notes.
--- (181) reserved doc line — see SKILL.md for in-depth notes.
--- (182) reserved doc line — see SKILL.md for in-depth notes.
--- (183) reserved doc line — see SKILL.md for in-depth notes.
--- (184) reserved doc line — see SKILL.md for in-depth notes.
--- (185) reserved doc line — see SKILL.md for in-depth notes.
--- (186) reserved doc line — see SKILL.md for in-depth notes.
--- (187) reserved doc line — see SKILL.md for in-depth notes.
--- (188) reserved doc line — see SKILL.md for in-depth notes.
--- (189) reserved doc line — see SKILL.md for in-depth notes.
--- (190) reserved doc line — see SKILL.md for in-depth notes.
--- (191) reserved doc line — see SKILL.md for in-depth notes.
--- (192) reserved doc line — see SKILL.md for in-depth notes.
--- (193) reserved doc line — see SKILL.md for in-depth notes.
--- (194) reserved doc line — see SKILL.md for in-depth notes.
--- (195) reserved doc line — see SKILL.md for in-depth notes.
--- (196) reserved doc line — see SKILL.md for in-depth notes.
--- (197) reserved doc line — see SKILL.md for in-depth notes.
--- (198) reserved doc line — see SKILL.md for in-depth notes.
--- (199) reserved doc line — see SKILL.md for in-depth notes.
--- (200) reserved doc line — see SKILL.md for in-depth notes.
--- (201) reserved doc line — see SKILL.md for in-depth notes.
--- (202) reserved doc line — see SKILL.md for in-depth notes.
--- (203) reserved doc line — see SKILL.md for in-depth notes.
--- (204) reserved doc line — see SKILL.md for in-depth notes.
--- (205) reserved doc line — see SKILL.md for in-depth notes.
--- (206) reserved doc line — see SKILL.md for in-depth notes.
--- (207) reserved doc line — see SKILL.md for in-depth notes.
--- (208) reserved doc line — see SKILL.md for in-depth notes.
--- (209) reserved doc line — see SKILL.md for in-depth notes.
--- (210) reserved doc line — see SKILL.md for in-depth notes.
--- (211) reserved doc line — see SKILL.md for in-depth notes.
--- (212) reserved doc line — see SKILL.md for in-depth notes.
--- (213) reserved doc line — see SKILL.md for in-depth notes.
--- (214) reserved doc line — see SKILL.md for in-depth notes.
--- (215) reserved doc line — see SKILL.md for in-depth notes.
--- (216) reserved doc line — see SKILL.md for in-depth notes.
--- (217) reserved doc line — see SKILL.md for in-depth notes.
--- (218) reserved doc line — see SKILL.md for in-depth notes.
--- (219) reserved doc line — see SKILL.md for in-depth notes.
---
---------------------------------------------------------------------------------
--- APPENDIX M : FX RECIPE COOKBOOK
---------------------------------------------------------------------------------
---
--- RECIPE 01 :: Rotating themed gradient on a custom Frame
---   local g = buildThemedGradient(myFrame, 35)
---   fxThemedRotate(g, 6)
---
--- RECIPE 02 :: Breathing accent halo around a button
---   local halo = new("Frame", { ... })
---   fxBreathe(halo, 0.8, 0.95, 1.2)
---
--- RECIPE 03 :: Diagonal shimmer sweep across a card
---   local s = buildShimmerGradient(card)
---   fxShimmer(s, 0.4)
---
--- RECIPE 04 :: Rainbow-cycling accent gradient
---   local g = gradient(frame, th.Accent, th.AccentSoft, 0)
---   fxRainbow(g, 0.8)
---
--- RECIPE 05 :: Pulsing icon (size oscillation)
---   fxPulse(icon, 0.05, 1.4, icon.Size)
---
--- RECIPE 06 :: Drifting orb (figure-8 style)
---   fxDrift(orb, 14, 8, 0.7, orb.Position)
---
---------------------------------------------------------------------------------
--- APPENDIX N : THEME COLOR TABLE (full RGB dump)
---------------------------------------------------------------------------------
---
--- OCEAN
---   Background      R  8  G 16  B 28
---   Sidebar         R 12  G 22  B 38
---   Topbar          R 10  G 20  B 34
---   Element         R 18  G 32  B 52
---   ElementHover    R 26  G 46  B 74
---   Accent          R 64  G180  B255
---   AccentSoft      R 28  G110  B180
---   Text            R225  G240  B255
---   SubText         R140  G170  B200
---   Border          R 34  G 60  B 90
---   Success         R 80  G220  B200
---   Error           R255  G 90  B110
---   BgGradientA     R  6  G 14  B 28
---   BgGradientB     R 14  G 34  B 70
---   BgGradientC     R 18  G 60  B110
---   AccentA         R 80  G200  B255
---   AccentB         R 40  G120  B220
---   AccentC         R130  G240  B230
---   HaloHue         R 60  G170  B255
---   ShimmerHue      R180  G230  B255
---   GlowHue         R 40  G150  B230
---   ParticleHue     R120  G210  B255
---
--- MATRIXGREEN (lighter)
---   Background      R 10  G 22  B 14
---   Sidebar         R 14  G 30  B 20
---   Topbar          R 12  G 26  B 17
---   Element         R 20  G 44  B 28
---   ElementHover    R 30  G 62  B 40
---   Accent          R120  G255  B160
---   AccentSoft      R 60  G200  B110
---   Text            R225  G255  B230
---   SubText         R150  G210  B170
---   Border          R 46  G110  B 64
---   Success         R160  G255  B190
---   Error           R255  G110  B110
---   BgGradientA     R  8  G 22  B 14
---   BgGradientB     R 16  G 52  B 30
---   BgGradientC     R 28  G 88  B 50
---   AccentA         R150  G255  B180
---   AccentB         R 70  G220  B120
---   AccentC         R200  G255  B200
---   HaloHue         R110  G240  B150
---   ShimmerHue      R210  G255  B220
---   GlowHue         R 80  G220  B130
---   ParticleHue     R170  G255  B190
---
--- CRIMSON (red + crimson stops)
---   Background      R 20  G  8  B 12
---   Sidebar         R 28  G 10  B 16
---   Topbar          R 24  G  9  B 14
---   Element         R 44  G 16  B 24
---   ElementHover    R 66  G 22  B 32
---   Accent          R240  G 70  B 90
---   AccentSoft      R170  G 35  B 55
---   Text            R255  G235  B235
---   SubText         R200  G155  B160
---   Border          R 95  G 28  B 40
---   Success         R150  G230  B160
---   Error           R255  G 90  B 90
---   BgGradientA     R 22  G  6  B 12
---   BgGradientB     R 60  G 14  B 26
---   BgGradientC     R110  G 22  B 40
---   AccentA         R255  G 90  B110
---   AccentB         R170  G 30  B 60
---   AccentC         R255  G150  B150
---   HaloHue         R230  G 60  B 90
---   ShimmerHue      R255  G200  B200
---   GlowHue         R200  G 40  B 70
---   ParticleHue     R255  G120  B140
---
---------------------------------------------------------------------------------
--- APPENDIX O : LUCIDE ICON CATALOGUE (topbar + future use)
---------------------------------------------------------------------------------
---   x                rbxassetid://10747384394   close
---   minus            rbxassetid://10734950309   minimize
---   eye-off          rbxassetid://10747384376   hide window
---   eye              rbxassetid://10747384315   show window
---   settings         rbxassetid://10734948114   settings tab
---   home             rbxassetid://10723415549   home tab
---   user             rbxassetid://10734897681   profile
---   search           rbxassetid://10734895698   search
---   bell             rbxassetid://10723341087   notifications
---   check            rbxassetid://10709790948   confirm
---   chevron-down     rbxassetid://10709790376   dropdown arrow
---   chevron-up       rbxassetid://10709790492   collapse
---   chevron-left     rbxassetid://10709790428   back
---   chevron-right    rbxassetid://10709790453   forward
---   arrow-right      rbxassetid://10709761000   button accent arrow
---   plus             rbxassetid://10734964084   add
---   trash-2          rbxassetid://10747416630   delete
---   save             rbxassetid://10747400789   save config
---   download         rbxassetid://10723398884   download
---   upload           rbxassetid://10723408840   upload
---   refresh-cw       rbxassetid://10747405021   refresh
---   info             rbxassetid://10723345133   info
---   alert-triangle   rbxassetid://10723342149   warn
---   alert-circle     rbxassetid://10723344922   error
---   zap              rbxassetid://10747443532   fast / power
---   star             rbxassetid://10747432338   favorite
---   heart            rbxassetid://10723408165   love
---   lock             rbxassetid://10734937402   locked
---   unlock           rbxassetid://10734939925   unlocked
---   eye-closed       rbxassetid://10747384376   hidden
---
---------------------------------------------------------------------------------
--- APPENDIX P : MIGRATION NOTES (v2.0 -> v2.5)
---------------------------------------------------------------------------------
--- No public API changes.  Existing scripts using Theme = 'Amethyst',
--- 'Sunset', 'Midnight', 'Forest', 'Cyber', 'Aurora' or 'Mono' still load,
--- but the theme is silently aliased to one of the 3 core palettes.
--- If you want an exact colour, switch Theme to 'Ocean', 'MatrixGreen' or
--- 'Crimson' directly.
--- 
--- The animated FX layers respect Aquafield._hidden, so calling :Hide()
--- also pauses the Heartbeat updates for free.
--- 
--- Closing the window now calls saveConfig() before destroying the ScreenGui
--- to preserve toggle / slider / dropdown / colour state when
--- ConfigurationSaving is enabled (this was already the v2.0 behaviour, but
--- with the new lucide ImageButton click target the hit-box is reliable on
--- touchscreens for the first time).
---
---------------------------------------------------------------------------------
--- APPENDIX Q : EXAMPLE WIRING (Auto-Click / Auto-Rebirth pattern)
---------------------------------------------------------------------------------
---
--- local Aquafield = loadstring(game:HttpGet(URL))()
--- local Window = Aquafield:CreateWindow({
---     Name = "1M CfO | AquaMoonHub",
---     Icon = 0,
---     LoadingTitle = "AquaMoonHub",
---     LoadingSubtitle = "by AquaMoon",
---     Theme = "Ocean",
---     ConfigurationSaving = {
---         Enabled = false,
---         FolderName = "AquaMoonHub",
---         FileName = "1M CfO Config",
---     },
---     KeySystem = false,
--- })
---
--- local FarmTab = Window:CreateTab("Farm", 4483362458)
--- FarmTab:CreateSection("Auto Farm")
---
--- local Remotes = game:GetService("ReplicatedStorage").Remotes
--- local autoFarm, autoRebirth, autoClickPower, autoClickMulti = false,false,false,false
---
--- FarmTab:CreateToggle({ Name = "Auto Click", Flag = "AutoClick",
---     CurrentValue = false, Callback = function(v)
---         autoFarm = v
---         if v then task.spawn(function()
---             while autoFarm and task.wait(0.05) do
---                 pcall(function() Remotes.ClickAction:FireServer() end)
---             end
---         end) end
---     end })
---
--- FarmTab:CreateToggle({ Name = "Auto Rebirth", Flag = "AutoRebirth",
---     CurrentValue = false, Callback = function(v)
---         autoRebirth = v
---         if v then task.spawn(function()
---             while autoRebirth and task.wait(1) do
---                 pcall(function()
---                     Remotes.PurchaseClickUpgrade:InvokeServer("Rebirth", 1)
---                 end)
---             end
---         end) end
---     end })
---
---------------------------------------------------------------------------------
--- APPENDIX R : VERBOSE INTERNAL NOTES (line padding for the curious)
---------------------------------------------------------------------------------
--- note 0001  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0002  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0003  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0004  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0005  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0006  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0007  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0008  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0009  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0010  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0011  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0012  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0013  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0014  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0015  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0016  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0017  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0018  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0019  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0020  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0021  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0022  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0023  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0024  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0025  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0026  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0027  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0028  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0029  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0030  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0031  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0032  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0033  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0034  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0035  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0036  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0037  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0038  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0039  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0040  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0041  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0042  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0043  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0044  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0045  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0046  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0047  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0048  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0049  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0050  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0051  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0052  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0053  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0054  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0055  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0056  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0057  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0058  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0059  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0060  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0061  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0062  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0063  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0064  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0065  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0066  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0067  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0068  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0069  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0070  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0071  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0072  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0073  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0074  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0075  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0076  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0077  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0078  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0079  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0080  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0081  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0082  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0083  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0084  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0085  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0086  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0087  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0088  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0089  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0090  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0091  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0092  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0093  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0094  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0095  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0096  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0097  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0098  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0099  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0100  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0101  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0102  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0103  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0104  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0105  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0106  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0107  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0108  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0109  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0110  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0111  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0112  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0113  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0114  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0115  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0116  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0117  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0118  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0119  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0120  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0121  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0122  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0123  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0124  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0125  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0126  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0127  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0128  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0129  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0130  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0131  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0132  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0133  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0134  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0135  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0136  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0137  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0138  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0139  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0140  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0141  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0142  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0143  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0144  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0145  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0146  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0147  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0148  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0149  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0150  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0151  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0152  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0153  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0154  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0155  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0156  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0157  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0158  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0159  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0160  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0161  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0162  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0163  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0164  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0165  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0166  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0167  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0168  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0169  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0170  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0171  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0172  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0173  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0174  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0175  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0176  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0177  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0178  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0179  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0180  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0181  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0182  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0183  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0184  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0185  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0186  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0187  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0188  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0189  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0190  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0191  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0192  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0193  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0194  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0195  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0196  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0197  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0198  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
--- note 0199  the FX engine schedules layers in registration order; later
---             layers are drawn on top so order also doubles as z-order.
---
--- end of appendix.
-
-
--- ============================================================================
--- APPENDIX B  :  v2 redesign change-log  (theme studio + search + motion)
--- ============================================================================
--- This appendix documents the v2 "100x cooler" redesign pass.  None of the
--- public API changed; only the visual layer was rebuilt.  Existing scripts
--- continue to call CreateWindow / CreateTab / CreateToggle exactly as before.
---
--- SUMMARY OF CHANGES
---   * Search bar mounted in the sidebar header; filters the active tab live.
---   * Theme picker rebuilt as a "Theme Studio" with a title above the cards,
---     three large animated gradient cards, and an ACTIVE label below them.
---   * Close / minimize / hide buttons now spin + fade on click.
---   * Window close animation tilts the frame -8 deg while collapsing.
---   * Aquafield:OnThemeChanged(fn) lets internal widgets react to theme swaps.
---   * All hover/focus/press states use TweenService for smooth motion.
---
--- redesign-note 0001  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0002  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0003  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0004  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0005  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0006  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0007  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0008  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0009  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0010  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0011  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0012  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0013  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0014  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0015  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0016  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0017  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0018  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0019  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0020  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0021  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0022  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0023  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0024  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0025  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0026  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0027  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0028  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0029  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0030  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0031  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0032  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0033  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0034  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0035  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0036  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0037  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0038  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0039  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0040  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0041  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0042  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0043  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0044  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0045  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0046  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0047  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0048  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0049  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0050  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0051  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0052  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0053  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0054  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0055  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0056  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0057  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0058  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0059  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0060  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0061  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0062  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0063  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0064  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0065  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0066  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0067  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0068  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0069  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0070  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0071  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0072  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0073  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0074  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0075  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0076  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0077  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0078  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
--- redesign-note 0079  v2 motion pass : every interactive surface reacts to
---                     hover / focus / press with a tween (topbar buttons,
---                     search bar focus ring, theme cards, tab indicator).
-
+do
+    local _origSet = Aquafield.SetTheme
+    function Aquafield:SetTheme(name)
+        _origSet(self, name)
+        if saveAquafieldPrefs then pcall(saveAquafieldPrefs) end
+    end
+end
+pcall(loadAquafieldPrefs)
 return Aquafield
