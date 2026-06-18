@@ -104,7 +104,8 @@ Breaking core modules will cascade into UI failures across the entire system.
 
 ## Credits
 
-Created and maintained by CICAGLISAQ
+Inspired by Rayfield - SiriusSoftware
+Created and maintained by CICAGLISAQ/AquaMoon
 
 ---
 
